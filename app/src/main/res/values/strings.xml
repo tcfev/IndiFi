@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Indifi</string>
+    <string name="discover_nearby_devices">Discover Nearby Devices</string>
 </resources>
