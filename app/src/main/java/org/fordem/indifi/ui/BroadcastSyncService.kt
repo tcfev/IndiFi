@@ -33,7 +33,7 @@ class BroadcastSyncService : Service() {
 
     private fun startTcpReceiver() {
 //        CoroutineScope(Dispatchers.IO).launch {
-            TcpHelper.startPrefSyncServer(applicationContext)
+//            TcpHelper.startPrefSyncServer(applicationContext)
 //        }
     }
 

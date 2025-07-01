@@ -7,9 +7,13 @@ import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import com.example.wifidirectcommunicationapp.MessageAdapter
 import org.fordem.indifi.Constants.connectedGMIPs
+import org.fordem.indifi.encryption.AESGCMHelper
+import org.fordem.indifi.encryption.EncryptedMessageWrapper
+import org.fordem.indifi.encryption.KeyStoreManager
 
 class ChatActivity : AppCompatActivity() {
 
@@ -19,9 +23,12 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var adapter: MessageAdapter
     private val messages = mutableListOf<Message>()
 
+
+    private var gm_ip: String? = null
     private var groupOwnerAddress: String? = null
     private var isGroupOwner = false
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
@@ -36,6 +43,7 @@ class ChatActivity : AppCompatActivity() {
         listView.adapter = adapter
 
         // Assume passed from WifiP2p connection
+        gm_ip = intent.getStringExtra("GM_IP")
         isGroupOwner = intent.getBooleanExtra("isGroupOwner", false)
         groupOwnerAddress = intent.getStringExtra("groupOwnerAddress")
 
@@ -47,7 +55,7 @@ class ChatActivity : AppCompatActivity() {
 
 
 //        if (isGroupOwner) {
-        TcpHelper.startChatServer { msg ->
+        TcpHelper.startChatServer { msg, _ ->
 
             Log.e("TAG", connectedGMIPs.toString())
 
@@ -102,12 +110,31 @@ class ChatActivity : AppCompatActivity() {
 //                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
 //                }
 
-                if (isGroupOwner) {
-                    TcpHelper.sendMessageToClient(msg) // Send to GM
-//                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
-                } else {
-                    groupOwnerAddress?.let { TcpHelper.sendMessageToServer(it, msg) } //Send to GO
+//                if (isGroupOwner) {
+//                    TcpHelper.sendMessageToClient(msg) // Send to GM
+////                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
+//                } else {
+//                    groupOwnerAddress?.let { TcpHelper.sendMessageToServer(it, msg) } //Send to GO
+//                }
+
+
+
+                // 1. Encrypt the message using AES-GCM and the peer's AES key
+                val peerPublicKey = KeyStoreManager.getPeerPublicKey(gm_ip.toString())
+                if (peerPublicKey == null) {
+                    Toast.makeText(this, "No public key for $gm_ip", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
                 }
+
+                val aesKey = KeyStoreManager.getOrCreateSharedAESKey(context = this, peerIp = gm_ip.toString(), peerPublicKey)
+                val (encryptedMsg, iv) = AESGCMHelper.encrypt(aesKey, msg)
+
+                // 2. Wrap the message as JSON
+                val encryptedJson = EncryptedMessageWrapper.createJson(encryptedMsg, iv)
+
+                // 3. Send the encrypted JSON to the peer
+                TcpHelper.connectToPeerAndSendMessage(gm_ip.toString(), encryptedJson)
+
 
                 inputField.text.clear()
             }

@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
 //        binding.btnLegacyWifi.setOnClickListener {
 //            startActivity(Intent(this, LegacyWifiActivity::class.java))
 //        }
-//
+
 //        binding.btnListHotspots.setOnClickListener {
 //            startActivity(Intent(this, WifiScanActivity::class.java))
 //        }

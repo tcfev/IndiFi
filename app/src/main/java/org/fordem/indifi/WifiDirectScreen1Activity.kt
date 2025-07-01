@@ -19,13 +19,16 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.fordem.indifi.Constants.connectedGMIPs
 import org.fordem.indifi.WifiDirectActivity.Companion
 import org.fordem.indifi.databinding.ActivityWifiDirectScreen1Binding
+import org.json.JSONObject
 
 class WifiDirectScreen1Activity : AppCompatActivity() {
     private val binding: ActivityWifiDirectScreen1Binding by lazy {
@@ -74,6 +77,11 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         channel = wifiP2pManager.initialize(this, mainLooper, null)
         setupIntentFilter()
         setupReceiver()
+
+
+        TcpHelper.startChatServer { _, _ ->
+        }
+
 
         binding.btnDiscoverPeers.setOnClickListener {
             when {
@@ -138,6 +146,27 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             } catch (e: SecurityException) {
                 Log.e(TAG, "Missing required permission for peer discovery", e)
             }
+        }
+
+        Constants.deviceConnectionCallback = {
+            val sharedPref = getSharedPreferences("group_info", Context.MODE_PRIVATE)
+            sharedPref.edit().apply {
+                putString(
+                    "GM_IP",
+                    it
+                )
+                apply()
+            }
+
+            // Broadcast all prefs
+            val allPrefs = sharedPref.all.mapValues { it.value.toString() }
+            val jsonData = JSONObject(allPrefs).toString()
+
+//            Handler(Looper.myLooper()!!).postDelayed({
+            TcpHelper.broadcastToGMs(jsonData)
+//            }, 20000)
+
+//            TcpHelper.startSilentReceiver(this)
         }
     }
 
@@ -215,28 +244,29 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         val networkInfo =
                             intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
 
-                        if (networkInfo != null && networkInfo.isConnected && !isChatActivityLaunched) {
+                        if (networkInfo != null && networkInfo.isConnected /*&& !isChatActivityLaunched*/) {
                             wifiP2pManager.requestConnectionInfo(channel) { info ->
                                 if (info.groupFormed && info.groupOwnerAddress != null) {
                                     isChatActivityLaunched = true
 
-                                    // Save GO/GM status and GO IP to SharedPreferences
-                                    val sharedPref = getSharedPreferences("WFD_PREFS", Context.MODE_PRIVATE)
-                                    sharedPref.edit().apply {
-                                        putBoolean("IS_GO", info.isGroupOwner)
-                                        putString("GROUP_OWNER_IP", info.groupOwnerAddress.hostAddress)
-                                        apply()
+                                    if (!info.isGroupOwner) {
+                                        info.groupOwnerAddress.hostAddress?.let {
+                                            TcpHelper.sendMessageToServer(
+                                                it, "New device connected"
+                                            )
+                                        }
+
+                                        Handler(mainLooper).postDelayed({
+                                            TcpHelper.startSilentReceiver(applicationContext)
+                                        }, 10000)
                                     }
 
-
-
-
-                                    launchChatActivity(info)
+//                                    launchChatActivity(info)
                                 } else {
                                     Handler(Looper.getMainLooper()).postDelayed({
                                         wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->
                                             if (retryInfo.groupFormed && retryInfo.groupOwnerAddress != null) {
-                                                launchChatActivity(retryInfo)
+//                                                launchChatActivity(retryInfo)
                                             }
                                         }
                                     }, 2000) // Wait 2 seconds

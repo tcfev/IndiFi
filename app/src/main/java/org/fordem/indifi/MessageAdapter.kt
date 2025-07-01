@@ -1,4 +1,4 @@
-package com.example.wifidirectcommunicationapp
+package org.fordem.indifi
 
 import android.content.Context
 import android.view.LayoutInflater
