@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.adapter
 
 import android.content.Context
 import android.view.LayoutInflater
@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.TextView
-import org.fordem.indifi.Message
+import org.fordem.indifi.ui.model.Message
 
 class MessageAdapter(context: Context, private val messages: List<Message>) :
     ArrayAdapter<Message>(context, 0, messages) {

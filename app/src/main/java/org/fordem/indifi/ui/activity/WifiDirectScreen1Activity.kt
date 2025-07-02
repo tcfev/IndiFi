@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.activity
 
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -19,15 +19,14 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import org.fordem.indifi.Constants.connectedGMIPs
-import org.fordem.indifi.WifiDirectActivity.Companion
+import org.fordem.indifi.ui.utils.Constants
+import org.fordem.indifi.ui.utils.TcpHelper
 import org.fordem.indifi.databinding.ActivityWifiDirectScreen1Binding
 import org.json.JSONObject
 
@@ -92,19 +91,30 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                             .setTitle("Disband Group?")
                             .setMessage("You are the Group Owner. Disbanding will disconnect all members. Proceed?")
                             .setPositiveButton("Yes") { _, _ ->
-                                wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
-                                    override fun onSuccess() {
-                                        getSharedPreferences("group_info", MODE_PRIVATE).edit().clear().apply()
+                                wifiP2pManager.removeGroup(
+                                    channel,
+                                    object : WifiP2pManager.ActionListener {
+                                        override fun onSuccess() {
+                                            getSharedPreferences("group_info", MODE_PRIVATE).edit()
+                                                .clear().apply()
 
-                                        Log.d("WFD", "Group disbanded (GO)")
-                                        Toast.makeText(this@WifiDirectScreen1Activity, "Group disbanded", Toast.LENGTH_SHORT).show()
-                                    }
+                                            Log.d("WFD", "Group disbanded (GO)")
+                                            Toast.makeText(
+                                                this@WifiDirectScreen1Activity,
+                                                "Group disbanded",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
 
-                                    override fun onFailure(reason: Int) {
-                                        Log.e("WFD", "Failed to disband group: $reason")
-                                        Toast.makeText(this@WifiDirectScreen1Activity, "Failed to disband group", Toast.LENGTH_SHORT).show()
-                                    }
-                                })
+                                        override fun onFailure(reason: Int) {
+                                            Log.e("WFD", "Failed to disband group: $reason")
+                                            Toast.makeText(
+                                                this@WifiDirectScreen1Activity,
+                                                "Failed to disband group",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    })
                             }
                             .setNegativeButton("No", null)
                             .show()
@@ -113,12 +123,20 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
                             override fun onSuccess() {
                                 Log.d("WFD", "Left group (GM)")
-                                Toast.makeText(this@WifiDirectScreen1Activity, "Disconnected from group", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    this@WifiDirectScreen1Activity,
+                                    "Disconnected from group",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
 
                             override fun onFailure(reason: Int) {
                                 Log.e("WFD", "Failed to leave group: $reason")
-                                Toast.makeText(this@WifiDirectScreen1Activity, "Failed to disconnect", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    this@WifiDirectScreen1Activity,
+                                    "Failed to disconnect",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         })
                     }
@@ -128,7 +146,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                 }
             }
         }
-
 
         binding.btnDiscoverPeers.setOnClickListener {
             when {
@@ -370,6 +387,8 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                     try {
                                         wifiP2pManager.requestGroupInfo(channel) { group ->
                                             if (group != null) {
+//                                                At this point, 2nd device is silently adding into the group, try to figureout how to check if the group
+//                                                already formed and get the 2nd device trying to connect.
                                                 val isGO = group.isGroupOwner
                                                 val myDevice =
                                                     group.owner // The device who created the group
@@ -377,6 +396,10 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                 if (isGO) {
 //                                                Log.d(TAG, "I am the Group Owner.")
 //                                                Constants.deviceConnectionCallback(info.groupOwnerAddress.toString())
+
+                                                    TcpHelper.startChatServer { _, _ ->
+                                                    }
+
                                                 } else {
                                                     val goIP = info.groupOwnerAddress.hostAddress
                                                     Log.d(TAG, "I am Group Member. GO IP: $goIP")
@@ -392,7 +415,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                         TcpHelper.startSilentReceiver(
                                                             applicationContext
                                                         )
-                                                    }, 20000)
+                                                    }, 10000)
                                                 }
                                             } else {
                                                 Log.e(TAG, "Group is null.")
@@ -400,12 +423,50 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                         }
                                     } catch (_: Exception) {
                                     }
-
                                 } else {
                                     Handler(Looper.getMainLooper()).postDelayed({
                                         wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->
                                             if (retryInfo.groupFormed && retryInfo.groupOwnerAddress != null) {
-                                                // Retry logic or launchChatActivity
+                                                try {
+                                                    wifiP2pManager.requestGroupInfo(channel) { group ->
+                                                        if (group != null) {
+                                                            val isGO = group.isGroupOwner
+                                                            val myDevice =
+                                                                group.owner // The device who created the group
+
+                                                            if (isGO) {
+//                                                Log.d(TAG, "I am the Group Owner.")
+//                                                Constants.deviceConnectionCallback(info.groupOwnerAddress.toString())
+                                                            } else {
+                                                                val goIP =
+                                                                    info.groupOwnerAddress.hostAddress
+                                                                Log.d(
+                                                                    TAG,
+                                                                    "I am Group Member. GO IP: $goIP"
+                                                                )
+
+                                                                goIP?.let {
+                                                                    TcpHelper.sendMessageToServer(
+                                                                        it,
+                                                                        "New device connected"
+                                                                    )
+                                                                }
+
+                                                                Handler(Looper.getMainLooper()).postDelayed(
+                                                                    {
+                                                                        TcpHelper.startSilentReceiver(
+                                                                            applicationContext
+                                                                        )
+                                                                    },
+                                                                    10000
+                                                                )
+                                                            }
+                                                        } else {
+                                                            Log.e(TAG, "Group is null.")
+                                                        }
+                                                    }
+                                                } catch (_: Exception) {
+                                                }
                                             }
                                         }
                                     }, 2000)

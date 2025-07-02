@@ -8,10 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import org.fordem.indifi.TcpHelper
 
 class BroadcastSyncService : Service() {
 

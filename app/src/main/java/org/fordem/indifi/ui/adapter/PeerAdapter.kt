@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.adapter
 
 import android.content.Context
 import android.view.LayoutInflater
@@ -7,6 +7,10 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.TextView
+import org.fordem.indifi.ui.utils.Constants
+import org.fordem.indifi.ui.utils.PeerActionMode
+import org.fordem.indifi.ui.model.PeerDevice
+import org.fordem.indifi.R
 
 class PeerAdapter(
     context: Context,

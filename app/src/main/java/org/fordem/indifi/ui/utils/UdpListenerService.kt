@@ -1,9 +1,10 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.utils
 
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.widget.Toast
+import org.fordem.indifi.ui.activity.ChatActivity
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 

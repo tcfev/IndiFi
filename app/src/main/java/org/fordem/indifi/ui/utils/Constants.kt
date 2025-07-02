@@ -1,4 +1,6 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.utils
+
+import org.fordem.indifi.ui.model.PeerDevice
 
 object Constants {
     val connectedGMIPs = mutableSetOf<String>()

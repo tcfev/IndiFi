@@ -1,4 +1,6 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.model
+
+import org.fordem.indifi.ui.utils.PeerActionMode
 
 data class PeerDevice(
     val name: String,

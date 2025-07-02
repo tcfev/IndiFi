@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.model
 
 data class Message(
     val content: String,

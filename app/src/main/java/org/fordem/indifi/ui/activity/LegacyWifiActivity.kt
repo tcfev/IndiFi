@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.activity
 
 import android.content.Context
 import android.content.Intent
@@ -15,6 +15,7 @@ import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.*
+import org.fordem.indifi.R
 import org.json.JSONObject
 import java.net.*
 

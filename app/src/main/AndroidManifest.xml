@@ -28,24 +28,24 @@
         android:theme="@style/Theme.Indifi"
         tools:targetApi="31">
         <activity
-            android:name=".WifiScanActivity"
+            android:name=".ui.activity.WifiScanActivity"
             android:exported="false" />
         <activity
-            android:name=".LegacyWifiActivity"
+            android:name=".ui.activity.LegacyWifiActivity"
             android:exported="false" />
         <activity
-            android:name=".ChatActivity"
+            android:name=".ui.activity.ChatActivity"
             android:exported="false" />
         <activity
-            android:name=".WifiDirectActivity"
+            android:name=".ui.activity.WifiDirectActivity"
             android:exported="false" />
         <activity
-            android:name=".WifiDirectScreen1Activity"
+            android:name=".ui.activity.WifiDirectScreen1Activity"
             android:exported="true">
 
         </activity>
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.activity.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Indifi">

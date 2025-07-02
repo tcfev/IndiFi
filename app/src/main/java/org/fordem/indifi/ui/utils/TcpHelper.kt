@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.utils
 
 import android.content.Context
 import android.net.wifi.p2p.WifiP2pInfo
@@ -6,12 +6,11 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.*
-import org.fordem.indifi.Constants.connectedGMIPs
-import org.fordem.indifi.Constants.displayedPeersList
+import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
+import org.fordem.indifi.ui.utils.Constants.displayedPeersList
 import org.fordem.indifi.encryption.AESGCMHelper
 import org.fordem.indifi.encryption.KeyStoreManager
 import org.fordem.indifi.encryption.KeyStoreManager.toBase64
-import java.security.*
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement
 import javax.crypto.SecretKey

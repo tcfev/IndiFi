@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.activity
 
 import android.Manifest
 import android.content.*
@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.fordem.indifi.R
 
 class WifiDirectActivity : AppCompatActivity() {
 

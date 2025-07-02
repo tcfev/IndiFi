@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.activity
 
 import android.content.Intent
 import android.os.Bundle

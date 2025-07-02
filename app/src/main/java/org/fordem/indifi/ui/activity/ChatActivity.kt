@@ -1,4 +1,4 @@
-package org.fordem.indifi
+package org.fordem.indifi.ui.activity
 
 import android.content.Context
 import android.os.Build
@@ -10,7 +10,11 @@ import android.widget.ListView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import org.fordem.indifi.Constants.connectedGMIPs
+import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
+import org.fordem.indifi.ui.model.Message
+import org.fordem.indifi.ui.adapter.MessageAdapter
+import org.fordem.indifi.R
+import org.fordem.indifi.ui.utils.TcpHelper
 import org.fordem.indifi.encryption.AESGCMHelper
 import org.fordem.indifi.encryption.EncryptedMessageWrapper
 import org.fordem.indifi.encryption.KeyStoreManager
