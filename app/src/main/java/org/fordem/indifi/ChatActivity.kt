@@ -55,7 +55,7 @@ class ChatActivity : AppCompatActivity() {
 
 
 //        if (isGroupOwner) {
-        TcpHelper.startChatServer { msg, _ ->
+        TcpHelper.startChatServer { msg, message ->
 
             Log.e("TAG", connectedGMIPs.toString())
 

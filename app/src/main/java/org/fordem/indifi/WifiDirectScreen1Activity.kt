@@ -22,6 +22,7 @@ import android.util.Log
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -82,6 +83,52 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         TcpHelper.startChatServer { _, _ ->
         }
 
+        binding.btnDisconnect.setOnClickListener {
+            wifiP2pManager.requestGroupInfo(channel) { group ->
+                if (group != null) {
+                    if (group.isGroupOwner) {
+                        // Device is GO → prompt user before disbanding group
+                        AlertDialog.Builder(this)
+                            .setTitle("Disband Group?")
+                            .setMessage("You are the Group Owner. Disbanding will disconnect all members. Proceed?")
+                            .setPositiveButton("Yes") { _, _ ->
+                                wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                                    override fun onSuccess() {
+                                        getSharedPreferences("group_info", MODE_PRIVATE).edit().clear().apply()
+
+                                        Log.d("WFD", "Group disbanded (GO)")
+                                        Toast.makeText(this@WifiDirectScreen1Activity, "Group disbanded", Toast.LENGTH_SHORT).show()
+                                    }
+
+                                    override fun onFailure(reason: Int) {
+                                        Log.e("WFD", "Failed to disband group: $reason")
+                                        Toast.makeText(this@WifiDirectScreen1Activity, "Failed to disband group", Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                            .setNegativeButton("No", null)
+                            .show()
+                    } else {
+                        // Device is GM → leave the group
+                        wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                            override fun onSuccess() {
+                                Log.d("WFD", "Left group (GM)")
+                                Toast.makeText(this@WifiDirectScreen1Activity, "Disconnected from group", Toast.LENGTH_SHORT).show()
+                            }
+
+                            override fun onFailure(reason: Int) {
+                                Log.e("WFD", "Failed to leave group: $reason")
+                                Toast.makeText(this@WifiDirectScreen1Activity, "Failed to disconnect", Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                    }
+                } else {
+                    Log.e("WFD", "Group is null")
+                    Toast.makeText(this, "No group info available", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
 
         binding.btnDiscoverPeers.setOnClickListener {
             when {
@@ -125,6 +172,10 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             }
 
             try {
+//                wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+//                    override fun onSuccess() {
+//                        Log.d(TAG, " Old group removed before connecting")
+
                 wifiP2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
                         Toast.makeText(
@@ -143,6 +194,32 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         Log.e(TAG, "Connection failed: $reason")
                     }
                 })
+//                    }
+
+//                    override fun onFailure(reason: Int) {
+//                        Log.w(TAG, "Failed to remove old group (possibly none existed): $reason")
+//
+//                        // Proceed anyway
+//                        wifiP2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
+//                            override fun onSuccess() {
+//                                Toast.makeText(
+//                                    this@WifiDirectScreen1Activity,
+//                                    "Connecting to ${device.deviceName}",
+//                                    Toast.LENGTH_SHORT
+//                                ).show()
+//                            }
+//
+//                            override fun onFailure(reason: Int) {
+//                                Toast.makeText(
+//                                    this@WifiDirectScreen1Activity,
+//                                    "Connection failed: $reason",
+//                                    Toast.LENGTH_SHORT
+//                                ).show()
+//                                Log.e(TAG, "Connection failed: $reason")
+//                            }
+//                        })
+//                    }
+//                })
             } catch (e: SecurityException) {
                 Log.e(TAG, "Missing required permission for peer discovery", e)
             }
@@ -240,36 +317,98 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         }
                     }
 
+//                    WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
+//                        val networkInfo =
+//                            intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
+//
+//                        if (networkInfo != null && networkInfo.isConnected /*&& !isChatActivityLaunched*/) {
+//                            wifiP2pManager.requestConnectionInfo(channel) { info ->
+//                                if (info.groupFormed && info.groupOwnerAddress != null) {
+//                                    isChatActivityLaunched = true
+//
+//                                    if (!info.isGroupOwner) {
+//                                        info.groupOwnerAddress.hostAddress?.let {
+//                                            TcpHelper.sendMessageToServer(
+//                                                it, "New device connected"
+//                                            )
+//                                        }
+//
+//                                        Handler(mainLooper).postDelayed({
+//                                            TcpHelper.startSilentReceiver(applicationContext)
+//                                        }, 10000)
+//                                    }
+//
+////                                    launchChatActivity(info)
+//                                } else {
+//                                    Handler(Looper.getMainLooper()).postDelayed({
+//                                        wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->
+//                                            if (retryInfo.groupFormed && retryInfo.groupOwnerAddress != null) {
+////                                                launchChatActivity(retryInfo)
+//                                            }
+//                                        }
+//                                    }, 2000) // Wait 2 seconds
+//                                }
+//                            }
+//
+//                        } else {
+//                            Log.d(TAG, "P2P connection dropped")
+//                            Toast.makeText(
+//                                this@WifiDirectScreen1Activity,
+//                                "Disconnected",
+//                                Toast.LENGTH_SHORT
+//                            ).show()
+//                        }
+//                    }
+
                     WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
                         val networkInfo =
                             intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
 
-                        if (networkInfo != null && networkInfo.isConnected /*&& !isChatActivityLaunched*/) {
+                        if (networkInfo != null && networkInfo.isConnected) {
                             wifiP2pManager.requestConnectionInfo(channel) { info ->
                                 if (info.groupFormed && info.groupOwnerAddress != null) {
-                                    isChatActivityLaunched = true
+                                    try {
+                                        wifiP2pManager.requestGroupInfo(channel) { group ->
+                                            if (group != null) {
+                                                val isGO = group.isGroupOwner
+                                                val myDevice =
+                                                    group.owner // The device who created the group
 
-                                    if (!info.isGroupOwner) {
-                                        info.groupOwnerAddress.hostAddress?.let {
-                                            TcpHelper.sendMessageToServer(
-                                                it, "New device connected"
-                                            )
+                                                if (isGO) {
+//                                                Log.d(TAG, "I am the Group Owner.")
+//                                                Constants.deviceConnectionCallback(info.groupOwnerAddress.toString())
+                                                } else {
+                                                    val goIP = info.groupOwnerAddress.hostAddress
+                                                    Log.d(TAG, "I am Group Member. GO IP: $goIP")
+
+                                                    goIP?.let {
+                                                        TcpHelper.sendMessageToServer(
+                                                            it,
+                                                            "New device connected"
+                                                        )
+                                                    }
+
+                                                    Handler(Looper.getMainLooper()).postDelayed({
+                                                        TcpHelper.startSilentReceiver(
+                                                            applicationContext
+                                                        )
+                                                    }, 20000)
+                                                }
+                                            } else {
+                                                Log.e(TAG, "Group is null.")
+                                            }
                                         }
-
-                                        Handler(mainLooper).postDelayed({
-                                            TcpHelper.startSilentReceiver(applicationContext)
-                                        }, 10000)
+                                    } catch (_: Exception) {
                                     }
 
-//                                    launchChatActivity(info)
                                 } else {
                                     Handler(Looper.getMainLooper()).postDelayed({
                                         wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->
                                             if (retryInfo.groupFormed && retryInfo.groupOwnerAddress != null) {
-//                                                launchChatActivity(retryInfo)
+                                                // Retry logic or launchChatActivity
                                             }
                                         }
-                                    }, 2000) // Wait 2 seconds
+                                    }, 2000)
                                 }
                             }
 
@@ -282,6 +421,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                             ).show()
                         }
                     }
+
                 }
             }
         }

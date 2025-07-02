@@ -47,19 +47,30 @@ class WifiScanActivity : AppCompatActivity() {
 
         wifiReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                val success = intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
+                val success =
+                    intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
                 if (success) {
                     showScanResults()
                 } else {
-                    Toast.makeText(this@WifiScanActivity, "Scan failed or restricted", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@WifiScanActivity,
+                        "Scan failed or restricted",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_CODE)
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_CODE
+            )
         } else {
             ensureLocationEnabledAndScan()
         }
@@ -145,7 +156,8 @@ class WifiScanActivity : AppCompatActivity() {
                 .setNetworkSpecifier(specifier)
                 .build()
 
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val connectivityManager =
+                getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
             val networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
@@ -156,7 +168,11 @@ class WifiScanActivity : AppCompatActivity() {
 
                     connectivityManager.bindProcessToNetwork(network)
                     runOnUiThread {
-                        Toast.makeText(this@WifiScanActivity, "Connected to $ssid", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@WifiScanActivity,
+                            "Connected to $ssid",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         sendHelloPacketToGO()
                         startActivity(Intent(this@WifiScanActivity, ChatActivity::class.java))
                         finish()
@@ -165,7 +181,11 @@ class WifiScanActivity : AppCompatActivity() {
 
                 override fun onUnavailable() {
                     super.onUnavailable()
-                    Toast.makeText(this@WifiScanActivity, "Connection to $ssid failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@WifiScanActivity,
+                        "Connection to $ssid failed",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
 
@@ -216,7 +236,11 @@ class WifiScanActivity : AppCompatActivity() {
         }.start()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == LOCATION_PERMISSION_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             ensureLocationEnabledAndScan()

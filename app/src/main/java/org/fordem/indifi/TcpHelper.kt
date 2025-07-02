@@ -37,7 +37,7 @@ object TcpHelper {
     private val peerAESKeys = mutableMapOf<String, SecretKey>()
 
 
-    @RequiresApi(Build.VERSION_CODES.O)
+//    @RequiresApi(Build.VERSION_CODES.O)
     fun startChatServer(onMessageReceived: (String, String) -> Unit) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -55,7 +55,6 @@ object TcpHelper {
                 }
 
                 Constants.deviceConnectionCallback(socket.inetAddress.toString())
-
 
                 CoroutineScope(Dispatchers.IO).launch {
                     socket.use {
@@ -364,55 +363,73 @@ object TcpHelper {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     fun sendMessageToServer(hostAddress: String, message: String) {
         CoroutineScope(Dispatchers.IO).launch {
-            val socket = Socket()
             try {
+                val socket = Socket()
                 socket.connect(InetSocketAddress(hostAddress, PORT), 5000)
-//                socket.getOutputStream().bufferedWriter().use {
-//                    it.write(message)
-//                    it.newLine()
-//                    it.flush()
-//                }
-
-
-                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-
-                // Step 0: Ensure keypair is available
-                KeyStoreManager.getOrCreateKeyPair()
-
-                // Step 1: Send our public key
-                val myPub = KeyStoreManager.getPublicKey().toBase64()
-                writer.write("ECDH_PUBLIC:$myPub\n")
-                writer.flush()
-
-                // Step 2: Wait for their public key
-                val theirPubRaw = reader.readLine()
-                if (theirPubRaw != null && theirPubRaw.startsWith("ECDH_PUBLIC:")) {
-                    val theirKey = base64ToPublicKey(theirPubRaw.removePrefix("ECDH_PUBLIC:"))
-                    sharedAESKey = deriveSharedAESKey(theirKey)
-                }
-
-                // Step 3: Encrypt and send message
-                sharedAESKey?.let { key ->
-                    val encrypted = AESGCMHelper.encrypt(key, message)
-                    writer.write("$encrypted\n")
-                    writer.flush()
+                socket.getOutputStream().bufferedWriter().use {
+                    it.write(message)
+                    it.newLine()
+                    it.flush()
                 }
 
                 socket.close()
             } catch (e: IOException) {
                 Log.e("TCP", "Send failed: ${e.message}")
-            } finally {
-                try {
-                    socket.close()
-                } catch (_: Exception) {
-                }
             }
         }
     }
+
+//    @RequiresApi(Build.VERSION_CODES.O)
+//    fun sendMessageToServer(hostAddress: String, message: String) {
+//        CoroutineScope(Dispatchers.IO).launch {
+//            val socket = Socket()
+//            try {
+//                socket.connect(InetSocketAddress(hostAddress, PORT), 5000)
+////                socket.getOutputStream().bufferedWriter().use {
+////                    it.write(message)
+////                    it.newLine()
+////                    it.flush()
+////                }
+//
+//
+//                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+//                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+//
+//                // Step 0: Ensure keypair is available
+//                KeyStoreManager.getOrCreateKeyPair()
+//
+//                // Step 1: Send our public key
+//                val myPub = KeyStoreManager.getPublicKey().toBase64()
+//                writer.write("ECDH_PUBLIC:$myPub\n")
+//                writer.flush()
+//
+//                // Step 2: Wait for their public key
+//                val theirPubRaw = reader.readLine()
+//                if (theirPubRaw != null && theirPubRaw.startsWith("ECDH_PUBLIC:")) {
+//                    val theirKey = base64ToPublicKey(theirPubRaw.removePrefix("ECDH_PUBLIC:"))
+//                    sharedAESKey = deriveSharedAESKey(theirKey)
+//                }
+//
+//                // Step 3: Encrypt and send message
+//                sharedAESKey?.let { key ->
+//                    val encrypted = AESGCMHelper.encrypt(key, message)
+//                    writer.write("$encrypted\n")
+//                    writer.flush()
+//                }
+//
+//                socket.close()
+//            } catch (e: IOException) {
+//                Log.e("TCP", "Send failed: ${e.message}")
+//            } finally {
+//                try {
+//                    socket.close()
+//                } catch (_: Exception) {
+//                }
+//            }
+//        }
+//    }
 
 //    fun sendMessageToClient(response: String) {
 //        CoroutineScope(Dispatchers.IO).launch {
