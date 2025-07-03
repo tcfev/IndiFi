@@ -1,5 +1,6 @@
 package org.fordem.indifi.ui.utils
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.wifi.p2p.WifiP2pInfo
 import android.os.Build
@@ -7,10 +8,10 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.*
 import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
-import org.fordem.indifi.ui.utils.Constants.displayedPeersList
 import org.fordem.indifi.encryption.AESGCMHelper
 import org.fordem.indifi.encryption.KeyStoreManager
 import org.fordem.indifi.encryption.KeyStoreManager.toBase64
+import org.fordem.indifi.ui.utils.Constants.PORT
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement
 import javax.crypto.SecretKey
@@ -24,8 +25,8 @@ import java.security.KeyFactory
 import java.security.PublicKey
 
 object TcpHelper {
-    private const val PORT = 8888
-    private const val SILENTPORT = 8899
+//    private const val PORT = 8888
+//    private const val SILENTPORT = 8899
     private var clientSocket: Socket? = null
     private val clientSockets = mutableListOf<Socket>()
     private var lastClientAddress: InetAddress? = null
@@ -36,109 +37,144 @@ object TcpHelper {
     private val peerAESKeys = mutableMapOf<String, SecretKey>()
 
 
-//    @RequiresApi(Build.VERSION_CODES.O)
-    fun startChatServer(onMessageReceived: (String, String) -> Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                serverSocket = ServerSocket(PORT)
-
-//            while (true) {
-                val socket = serverSocket!!.accept()
-                lastClientAddress = socket.inetAddress  // ← Save GM's IP
-                gmAddresses.add(socket)
-                connectedGMIPs.add(socket.inetAddress.hostAddress!!) // Save GM IP
-
-                displayedPeersList.find { it.ip.isEmpty() }?.let { peer ->
-                    val updated = peer.copy(ip = socket.inetAddress.hostAddress!!)
-                    displayedPeersList[displayedPeersList.indexOf(peer)] = updated
-                }
-
-                Constants.deviceConnectionCallback(socket.inetAddress.toString())
-
-                CoroutineScope(Dispatchers.IO).launch {
-                    socket.use {
-                        try {
-//                            val reader = BufferedReader(InputStreamReader(it.getInputStream()))
-////                        val message = reader.readLine()
-////                        onMessageReceived(message)
+    //    @RequiresApi(Build.VERSION_CODES.O)
+//    @SuppressLint("NewApi")
+//    fun startChatServer(
+//        lastDeviceInfo: String,
+//        context: Context,
+//        isGO: Boolean,
+//        onMessageReceived: (String) -> Unit
+//    ) {
+////        CoroutineScope(Dispatchers.IO).launch {
+////            try {
+////                serverSocket = ServerSocket(PORT)
+////
+//////            while (true) {
+////                val socket = serverSocket!!.accept()
+////                lastClientAddress = socket.inetAddress  // ← Save GM's IP
+////                gmAddresses.add(socket)
+////                connectedGMIPs.add(socket.inetAddress.hostAddress!!) // Save GM IP
+////
+////                displayedPeersList.find { it.ip.isEmpty() }?.let { peer ->
+////                    val updated = peer.copy(ip = socket.inetAddress.hostAddress!!)
+////                    displayedPeersList[displayedPeersList.indexOf(peer)] = updated
+////                }
+////
+////                Constants.deviceConnectionCallback(socket.inetAddress.toString())
+////
+////                CoroutineScope(Dispatchers.IO).launch {
+////                    socket.use {
+////                        try {
+//////                            val reader = BufferedReader(InputStreamReader(it.getInputStream()))
+//////                        val message = reader.readLine()
+//////                        onMessageReceived(message)
+//////
+//////                            var line: String?
+//////                            while (reader.readLine().also { it1 -> line = it1 } != null) {
+//////                                onMessageReceived(line!!)
+//////                            }
+////
+////
+////                            val peerIp = socket.inetAddress.hostAddress!!
+////                            val reader = BufferedReader(InputStreamReader(it.getInputStream()))
+////                            val writer = BufferedWriter(OutputStreamWriter(it.getOutputStream()))
+////
+////                            // Step 1: Read peer public key
+////                            val incoming = reader.readLine()
+////                            if (incoming.startsWith("ECDH_PUBLIC:")) {
+////                                val peerBase64 = incoming.removePrefix("ECDH_PUBLIC:")
+////                                val peerPubKey = base64ToPublicKey(peerBase64)
+////                                sharedAESKey = deriveSharedAESKey(peerPubKey)
+////
+////                                // Step 2: Send our public key back
+////                                val myPub = KeyStoreManager.getPublicKey().toBase64()
+////                                writer.write("ECDH_PUBLIC:$myPub\n")
+////                                writer.flush()
+////
+////                                // Step 3: Derive shared AES key and save it
+////                                peerAESKeys[peerIp] = sharedAESKey!!
+////                                Log.d("TCP", "AES key established with $peerIp")
+////                            }
+////
+////                            // Step 3: Wait for encrypted chat messages
+////                            var line: String?
+////                            while (reader.readLine().also { it1 -> line = it1 } != null) {
+////                                val key = peerAESKeys[peerIp]
+////                                if (key != null) {
+////                                    try {
+//////                                        val decrypted = sharedAESKey?.let { key ->
+//////                                            AESGCMHelper.decrypt(line!!, key)
+//////                                        }
+//////                                        onMessageReceived(decrypted ?: "Failed to decrypt")
+////
+//////                                        val decrypted = AESGCMHelper.decrypt(line!!, key)
+//////                                        onMessageReceived(peerIp, decrypted)
+////
+////                                        val json = JSONObject(line!!)
+////                                        val ciphertext = Base64.getDecoder().decode(json.getString("ciphertext"))
+////                                        val iv = Base64.getDecoder().decode(json.getString("iv"))
+////
+////                                        val aesKey = peerAESKeys[peerIp]
+////                                        if (aesKey != null) {
+////                                            val decrypted = AESGCMHelper.decrypt(aesKey, iv, ciphertext)
+////                                            onMessageReceived(peerIp, decrypted)
+////                                        } else {
+////                                            Log.e("TCP", "No AES key found for $peerIp")
+////                                        }
+////                                    } catch (e: Exception) {
+////                                        Log.e("TCP", "Failed to decrypt from $peerIp: ${e.message}")
+////                                    }
+////                                }
+////                            }
+////                            peerAESKeys.remove(peerIp)
+////                        } catch (e: Exception) {
+////                            Log.e("TCP", "Client error: ${e.message}")
+////                        } finally {
+////                            try {
+////                                socket.close()
+////                            } catch (_: Exception) {
+////                            }
+////                            gmAddresses.remove(socket)
+////                            connectedGMIPs.remove(socket.inetAddress.hostAddress!!) // Cleanup
+////                        }
+////                    }
+////                }
+//////            }
+////
+////            } catch (e: Exception) {
+////                Log.e("TCP", "Chat server failed: ${e.message}")
+////            }
+////        }
 //
-//                            var line: String?
-//                            while (reader.readLine().also { it1 -> line = it1 } != null) {
-//                                onMessageReceived(line!!)
-//                            }
-
-
-                            val peerIp = socket.inetAddress.hostAddress!!
-                            val reader = BufferedReader(InputStreamReader(it.getInputStream()))
-                            val writer = BufferedWriter(OutputStreamWriter(it.getOutputStream()))
-
-                            // Step 1: Read peer public key
-                            val incoming = reader.readLine()
-                            if (incoming.startsWith("ECDH_PUBLIC:")) {
-                                val peerBase64 = incoming.removePrefix("ECDH_PUBLIC:")
-                                val peerPubKey = base64ToPublicKey(peerBase64)
-                                sharedAESKey = deriveSharedAESKey(peerPubKey)
-
-                                // Step 2: Send our public key back
-                                val myPub = KeyStoreManager.getPublicKey().toBase64()
-                                writer.write("ECDH_PUBLIC:$myPub\n")
-                                writer.flush()
-
-                                // Step 3: Derive shared AES key and save it
-                                peerAESKeys[peerIp] = sharedAESKey!!
-                                Log.d("TCP", "AES key established with $peerIp")
-                            }
-
-                            // Step 3: Wait for encrypted chat messages
-                            var line: String?
-                            while (reader.readLine().also { it1 -> line = it1 } != null) {
-                                val key = peerAESKeys[peerIp]
-                                if (key != null) {
-                                    try {
-//                                        val decrypted = sharedAESKey?.let { key ->
-//                                            AESGCMHelper.decrypt(line!!, key)
-//                                        }
-//                                        onMessageReceived(decrypted ?: "Failed to decrypt")
-
-//                                        val decrypted = AESGCMHelper.decrypt(line!!, key)
-//                                        onMessageReceived(peerIp, decrypted)
-
-                                        val json = JSONObject(line!!)
-                                        val ciphertext = Base64.getDecoder().decode(json.getString("ciphertext"))
-                                        val iv = Base64.getDecoder().decode(json.getString("iv"))
-
-                                        val aesKey = peerAESKeys[peerIp]
-                                        if (aesKey != null) {
-                                            val decrypted = AESGCMHelper.decrypt(aesKey, iv, ciphertext)
-                                            onMessageReceived(peerIp, decrypted)
-                                        } else {
-                                            Log.e("TCP", "No AES key found for $peerIp")
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.e("TCP", "Failed to decrypt from $peerIp: ${e.message}")
-                                    }
-                                }
-                            }
-                            peerAESKeys.remove(peerIp)
-                        } catch (e: Exception) {
-                            Log.e("TCP", "Client error: ${e.message}")
-                        } finally {
-                            try {
-                                socket.close()
-                            } catch (_: Exception) {
-                            }
-                            gmAddresses.remove(socket)
-                            connectedGMIPs.remove(socket.inetAddress.hostAddress!!) // Cleanup
-                        }
-                    }
-                }
+//
+//        CoroutineScope(Dispatchers.IO).launch {
+//            try {
+//                val serverSocket = ServerSocket(PORT)
+//                Log.d("TCP", "Server started on port $PORT")
+//
+//                while (true) {
+//                    val clientSocket = serverSocket.accept()
+//                    clientSockets.add(clientSocket)
+//
+//                    lastClientAddress = clientSocket.inetAddress  // ← Save GM's IP
+//                    gmAddresses.add(clientSocket)
+//                    connectedGMIPs.add(clientSocket.inetAddress.hostAddress!!) // Save GM IP
+//
+//                    if (isGO) {
+//                        Constants.deviceConnectionCallback(
+//                            lastDeviceInfo,
+//                            clientSocket.inetAddress.hostAddress!!
+//                        )
+//                    }
+//                    Log.d("TCP", "Client connected: ${clientSocket.inetAddress.hostAddress}")
+//
+//                    handleClient(context, isGO, clientSocket, onMessageReceived)
+//                }
+//            } catch (e: IOException) {
+//                Log.e("TCP", "Server error: ${e.message}")
 //            }
-
-            } catch (e: Exception) {
-                Log.e("TCP", "Chat server failed: ${e.message}")
-            }
-        }
-    }
+//        }
+//    }
 
     fun deriveSharedAESKey(peerPublicKey: PublicKey): SecretKey {
         val privateKey = KeyStoreManager.getPrivateKey()
@@ -245,7 +281,7 @@ object TcpHelper {
 //        }
 //    }
 
-    private var isServerRunning = false
+    var isServerRunning = false
 
     fun startPrefSyncServer(context: Context, info: WifiP2pInfo) {
 //        CoroutineScope(Dispatchers.IO).launch {
@@ -325,29 +361,38 @@ object TcpHelper {
         }
     }
 
-    private fun handleClient(socket: Socket, onMessageReceived: (String) -> Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-                var line: String?
-
-                while (reader.readLine().also { line = it } != null) {
-                    Log.d("TCP", "Received: $line")
-                    onMessageReceived(line!!)
-                }
-
-            } catch (e: IOException) {
-                Log.e("TCP", "Client disconnected or error: ${e.message}")
-            } finally {
-                try {
-                    socket.close()
-                    clientSockets.remove(socket)
-                } catch (e: IOException) {
-                    Log.e("TCP", "Error closing socket: ${e.message}")
-                }
-            }
-        }
-    }
+//    private fun handleClient(
+//        context: Context,
+//        isGO: Boolean,
+//        socket: Socket,
+//        onMessageReceived: (String) -> Unit
+//    ) {
+//        CoroutineScope(Dispatchers.IO).launch {
+//            try {
+//                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+//                var line: String?
+//
+//                while (reader.readLine().also { line = it } != null) {
+//                    Log.d("TCP", "Received: $line")
+//                    if (isGO) {
+////                        Constants.dummyLegacyClientCallback(line!!)
+//                        Constants.DummyLCMessage = line.toString()
+//                    }
+//                    onMessageReceived(line!!)
+//                }
+//
+//            } catch (e: IOException) {
+//                Log.e("TCP", "Client disconnected or error: ${e.message}")
+//            } finally {
+//                try {
+//                    socket.close()
+//                    clientSockets.remove(socket)
+//                } catch (e: IOException) {
+//                    Log.e("TCP", "Error closing socket: ${e.message}")
+//                }
+//            }
+//        }
+//    }
 
     private fun broadcastToAll(message: String) {
         for (client in clientSockets.toList()) {
@@ -362,23 +407,23 @@ object TcpHelper {
         }
     }
 
-    fun sendMessageToServer(hostAddress: String, message: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val socket = Socket()
-                socket.connect(InetSocketAddress(hostAddress, PORT), 5000)
-                socket.getOutputStream().bufferedWriter().use {
-                    it.write(message)
-                    it.newLine()
-                    it.flush()
-                }
-
-                socket.close()
-            } catch (e: IOException) {
-                Log.e("TCP", "Send failed: ${e.message}")
-            }
-        }
-    }
+//    fun sendMessageToServer(hostAddress: String, message: String) {
+//        CoroutineScope(Dispatchers.IO).launch {
+//            try {
+//                val socket = Socket()
+//                socket.connect(InetSocketAddress(hostAddress, PORT), 5000)
+//                socket.getOutputStream().bufferedWriter().use {
+//                    it.write(message)
+//                    it.newLine()
+//                    it.flush()
+//                }
+//
+//                socket.close()
+//            } catch (e: IOException) {
+//                Log.e("TCP", "Send failed: ${e.message}")
+//            }
+//        }
+//    }
 
 //    @RequiresApi(Build.VERSION_CODES.O)
 //    fun sendMessageToServer(hostAddress: String, message: String) {

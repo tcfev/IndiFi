@@ -8,11 +8,8 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-
-    <!-- Only for Android 13+ -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" /> <!-- Only for Android 13+ -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
-
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
@@ -28,6 +25,9 @@
         android:theme="@style/Theme.Indifi"
         tools:targetApi="31">
         <activity
+            android:name=".ui.activity.DummyWFD_LCMessageActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.activity.WifiScanActivity"
             android:exported="false" />
         <activity
@@ -41,9 +41,7 @@
             android:exported="false" />
         <activity
             android:name=".ui.activity.WifiDirectScreen1Activity"
-            android:exported="true">
-
-        </activity>
+            android:exported="true"></activity>
         <activity
             android:name=".ui.activity.MainActivity"
             android:exported="true"
@@ -60,7 +58,10 @@
             android:name=".ui.BroadcastSyncService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-
+        <service
+            android:name=".ui.utils.MessageRouterService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

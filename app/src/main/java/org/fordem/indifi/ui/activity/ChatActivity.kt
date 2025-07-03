@@ -10,14 +10,15 @@ import android.widget.ListView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
-import org.fordem.indifi.ui.model.Message
-import org.fordem.indifi.ui.adapter.MessageAdapter
 import org.fordem.indifi.R
-import org.fordem.indifi.ui.utils.TcpHelper
 import org.fordem.indifi.encryption.AESGCMHelper
 import org.fordem.indifi.encryption.EncryptedMessageWrapper
 import org.fordem.indifi.encryption.KeyStoreManager
+import org.fordem.indifi.ui.adapter.MessageAdapter
+import org.fordem.indifi.ui.model.Message
+import org.fordem.indifi.ui.utils.MessageRouterHelper
+import org.fordem.indifi.ui.utils.MessageRouterService
+import org.fordem.indifi.ui.utils.TcpHelper
 
 class ChatActivity : AppCompatActivity() {
 
@@ -59,29 +60,29 @@ class ChatActivity : AppCompatActivity() {
 
 
 //        if (isGroupOwner) {
-        TcpHelper.startChatServer { msg, message ->
-
-            Log.e("TAG", connectedGMIPs.toString())
-
-//                if (msg.contains("__JOINED__")) {
-//                    val prefs = getSharedPreferences("group_info", Context.MODE_PRIVATE)
-//                    val allPrefs = prefs.all.map { "${it.key}=${it.value}" }.joinToString("&")
-//                    TcpHelper.broadcastSharedPrefsToClients(allPrefs)
-//                    Log.d("TCP", "Broadcasted updated SharedPrefs to all GMs")
-//                } else if (msg.contains("__LEFT__")) {
-//                    // Handle future disconnect logic
-//                    val deviceName = msg.removePrefix("__LEFT__:")
-//                    val prefs = getSharedPreferences("group_info", Context.MODE_PRIVATE)
-//                    prefs.edit().remove(deviceName).apply()
-//                    val allPrefs = prefs.all.map { "${it.key}=${it.value}" }.joinToString("&")
-//                    TcpHelper.broadcastSharedPrefsToClients("PREF_UPDATE:$allPrefs")
-//                } else {
-            runOnUiThread {
-                messages.add(Message(msg, false))
-                adapter.notifyDataSetChanged()
-            }
-//                }
-        }
+//        TcpHelper.startChatServer(Constants.lastDeviceInfo, this, false) { msg ->
+//
+//            Log.e("TAG", connectedGMIPs.toString())
+//
+////                if (msg.contains("__JOINED__")) {
+////                    val prefs = getSharedPreferences("group_info", Context.MODE_PRIVATE)
+////                    val allPrefs = prefs.all.map { "${it.key}=${it.value}" }.joinToString("&")
+////                    TcpHelper.broadcastSharedPrefsToClients(allPrefs)
+////                    Log.d("TCP", "Broadcasted updated SharedPrefs to all GMs")
+////                } else if (msg.contains("__LEFT__")) {
+////                    // Handle future disconnect logic
+////                    val deviceName = msg.removePrefix("__LEFT__:")
+////                    val prefs = getSharedPreferences("group_info", Context.MODE_PRIVATE)
+////                    prefs.edit().remove(deviceName).apply()
+////                    val allPrefs = prefs.all.map { "${it.key}=${it.value}" }.joinToString("&")
+////                    TcpHelper.broadcastSharedPrefsToClients("PREF_UPDATE:$allPrefs")
+////                } else {
+//            runOnUiThread {
+//                messages.add(Message(msg, false))
+//                adapter.notifyDataSetChanged()
+//            }
+////                }
+//        }
 //        } else {
 //            TcpHelper.startServer { msg ->
 ////                    if (msg.startsWith("PREF_UPDATE:")) {
@@ -114,12 +115,15 @@ class ChatActivity : AppCompatActivity() {
 //                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
 //                }
 
-//                if (isGroupOwner) {
-//                    TcpHelper.sendMessageToClient(msg) // Send to GM
-////                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
-//                } else {
-//                    groupOwnerAddress?.let { TcpHelper.sendMessageToServer(it, msg) } //Send to GO
-//                }
+                if (isGroupOwner) {
+                    TcpHelper.sendMessageToClient(msg) // Send to GM
+//                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
+                } else {
+                    groupOwnerAddress?.let {
+//                        TcpHelper.sendMessageToServer(it, msg)
+                        MessageRouterHelper.messageRouterService?.sendMessageToServer(it, msg)
+                    } //Send to GO
+                }
 
 
 
@@ -163,7 +167,8 @@ class ChatActivity : AppCompatActivity() {
         super.onDestroy()
         if (!isGroupOwner && groupOwnerAddress != null) {
             val deviceName = getDeviceName()
-            TcpHelper.sendMessageToServer(groupOwnerAddress!!, "__LEFT__:$deviceName")
+//            MessageRouterService().sendMessageToGo(groupOwnerAddress!!, "__LEFT__:$deviceName")
+            MessageRouterHelper.messageRouterService?.sendMessageToServer(groupOwnerAddress!!, "__LEFT__:$deviceName")
         }
     }
 
