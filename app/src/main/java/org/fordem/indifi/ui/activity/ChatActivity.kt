@@ -11,9 +11,9 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import org.fordem.indifi.R
-import org.fordem.indifi.encryption.AESGCMHelper
-import org.fordem.indifi.encryption.EncryptedMessageWrapper
-import org.fordem.indifi.encryption.KeyStoreManager
+import org.fordem.indifi.ui.encryption.AESGCMHelper
+import org.fordem.indifi.ui.encryption.EncryptedMessageWrapper
+import org.fordem.indifi.ui.encryption.KeyStoreManager
 import org.fordem.indifi.ui.adapter.MessageAdapter
 import org.fordem.indifi.ui.model.Message
 import org.fordem.indifi.ui.utils.MessageRouterHelper

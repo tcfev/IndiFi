@@ -4,7 +4,7 @@ import org.fordem.indifi.ui.model.PeerDevice
 
 object Constants {
     lateinit var DummyLCMessage: String
-    lateinit var ipLcGo: String
+    var ipLcGo: String? = null
     val connectedGMIPs = mutableSetOf<String>()
     val  displayedPeersList = mutableListOf<PeerDevice>()
     val connectedDevicesList = mutableListOf<PeerDevice>()

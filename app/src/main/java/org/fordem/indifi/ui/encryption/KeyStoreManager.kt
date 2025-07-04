@@ -1,4 +1,4 @@
-package org.fordem.indifi.encryption
+package org.fordem.indifi.ui.encryption
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec

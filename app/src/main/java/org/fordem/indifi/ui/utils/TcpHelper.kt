@@ -8,9 +8,9 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.*
 import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
-import org.fordem.indifi.encryption.AESGCMHelper
-import org.fordem.indifi.encryption.KeyStoreManager
-import org.fordem.indifi.encryption.KeyStoreManager.toBase64
+import org.fordem.indifi.ui.encryption.AESGCMHelper
+import org.fordem.indifi.ui.encryption.KeyStoreManager
+import org.fordem.indifi.ui.encryption.KeyStoreManager.toBase64
 import org.fordem.indifi.ui.utils.Constants.PORT
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement

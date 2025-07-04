@@ -43,10 +43,10 @@ class MainActivity : AppCompatActivity() {
         MessageRouterHelper.bindService(this)
     }
 
-    override fun onDestroy() {
-        MessageRouterHelper.unbindService(this)
-        super.onDestroy()
-    }
+//    override fun onDestroy() {
+//        MessageRouterHelper.unbindService(this)
+//        super.onDestroy()
+//    }
 
     override fun onStop() {
         super.onStop()

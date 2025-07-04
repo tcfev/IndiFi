@@ -24,8 +24,7 @@ import javax.inject.Inject
 class WifiDirectViewModel @Inject constructor(
     private val context: Application
 ) : AndroidViewModel(context) {
-
-    val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    private val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.NEARBY_WIFI_DEVICES,

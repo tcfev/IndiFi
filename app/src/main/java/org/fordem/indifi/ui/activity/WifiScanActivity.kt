@@ -52,9 +52,9 @@ class WifiScanActivity : AppCompatActivity() {
     private val wifiList = mutableListOf<String>()
     private val LOCATION_PERMISSION_CODE = 1001
 
-    //    private var messageRouterService: MessageRouterService? = null
+//    private var messageRouterService: MessageRouterService? = null
 //    private var isServiceBound = false
-    private var currentP2pInfo: WifiP2pInfo? = null
+//    private var currentP2pInfo: WifiP2pInfo? = null
 //    private val serviceConnection = object : ServiceConnection {
 //        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
 //            val localBinder = binder as MessageRouterService.LocalBinder
@@ -92,8 +92,7 @@ class WifiScanActivity : AppCompatActivity() {
         wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         wifiReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                val success =
-                    intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
+                val success = intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
                 if (success) {
                     showScanResults()
                 } else {
@@ -143,7 +142,6 @@ class WifiScanActivity : AppCompatActivity() {
             // This ensures GO listens for incoming socket messages
             Handler(Looper.getMainLooper()).postDelayed({
                 MessageRouterHelper.messageRouterService?.startChatServer(
-                    context = this@WifiScanActivity,
                     onMessageReceived = { message ->
                         runOnUiThread {
                             Toast.makeText(

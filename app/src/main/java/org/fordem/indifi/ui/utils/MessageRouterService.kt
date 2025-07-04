@@ -45,12 +45,9 @@ class MessageRouterService : Service() {
     private var lastClientAddress: InetAddress? = null
     private val gmAddresses = mutableSetOf<Socket>()  // All connected GMs
     private var serverSocket: ServerSocket? = null
-
     private var sharedAESKey: SecretKey? = null
     private val peerAESKeys = mutableMapOf<String, SecretKey>()
-
-    var isServerRunning = false
-
+    private var isServerRunning = false
     private val binder = LocalBinder()
 
     inner class LocalBinder : Binder() {
@@ -69,14 +66,6 @@ class MessageRouterService : Service() {
 
             startForeground(101, notification)
         }
-
-        startTcpReceiver() // works on all Android versions
-    }
-
-    private fun startTcpReceiver() {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            TcpHelper.startPrefSyncServer(applicationContext)
-//        }
     }
 
     private fun createNotificationChannel() {
@@ -92,17 +81,6 @@ class MessageRouterService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-//        startChatServer(
-//            lastDeviceInfo = TODO(),
-//            context = TODO(),
-//            isGO = TODO(),
-//            onMessageReceived = TODO()
-//        )
-//        startUdpReceiverOnGO()
-//        startPrefSyncServer(
-//            context = TODO(),
-//            info = TODO()
-//        )
         return START_STICKY // ensures service restarts if killed
     }
 
@@ -110,7 +88,6 @@ class MessageRouterService : Service() {
 
     @SuppressLint("NewApi")
     fun startChatServer(
-        context: Context,
         onMessageReceived: (String) -> Unit
     ) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -133,7 +110,7 @@ class MessageRouterService : Service() {
                     }
                     Log.d("TCP", "Client connected: ${clientSocket.inetAddress.hostAddress}")
 
-                    handleClient(context, clientSocket, onMessageReceived)
+                    handleClient(clientSocket, onMessageReceived)
                 }
             } catch (e: IOException) {
                 Log.e("TCP", "Server error: ${e.message}")
@@ -284,7 +261,6 @@ class MessageRouterService : Service() {
     }
 
     private fun handleClient(
-        context: Context,
         socket: Socket,
         onMessageReceived: (String) -> Unit
     ) {
@@ -296,26 +272,22 @@ class MessageRouterService : Service() {
                 while (reader.readLine().also { line = it } != null) {
                     Log.d("TCP", "Received: $line")
                     if (isGOviaWFD) {
-//                        Constants.dummyLegacyClientCallback(line!!)
                         Constants.DummyLCMessage = line.toString()
-//                        Handler(Looper.getMainLooper()).post {
-//                            Toast.makeText(context, "$line", Toast.LENGTH_SHORT).show()
-//                        }
-                        Handler(mainLooper).postDelayed({
-                            MessageRouterHelper.messageRouterService?.sendMessageToServer(
-                                hostAddress = /*getHotspotGatewayIP(context)!!*/ ipLcGo,
-                                message = Constants.DummyLCMessage /*line.toString()*/
-                            )
 
-                        }, 5000)
+                        if (line.toString()
+                                .isNotEmpty() && line.toString().isNotBlank()
+                        ) {
+                            Handler(mainLooper).postDelayed({
+                                ipLcGo?.let {
+                                    MessageRouterHelper.messageRouterService?.sendMessageToServer(
+                                        hostAddress = /*getHotspotGatewayIP(context)!!*/ it,
+                                        message = Constants.DummyLCMessage /*line.toString()*/
+                                    )
+                                }
+
+                            }, 5000)
+                        }
                     }
-//                    if (isGoViaLegacy) {
-//                        Handler(Looper.getMainLooper()).post {
-//                            Toast.makeText(context, "$line", Toast.LENGTH_SHORT).show()
-//                        }
-//
-//                        isGoViaLegacy = false
-//                    }
                     onMessageReceived(line!!)
                 }
 

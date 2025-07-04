@@ -1,11 +1,18 @@
 package org.fordem.indifi.ui.activity
 
 import android.Manifest
-import android.content.*
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.NetworkInfo
 import android.net.wifi.WpsInfo
-import android.net.wifi.p2p.*
+import android.net.wifi.p2p.WifiP2pConfig
+import android.net.wifi.p2p.WifiP2pDevice
+import android.net.wifi.p2p.WifiP2pInfo
+import android.net.wifi.p2p.WifiP2pManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,8 +24,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.fordem.indifi.R
+import org.fordem.indifi.databinding.ActivityWifiDirectBinding
 
+@SuppressLint("MissingPermission")
 class WifiDirectActivity : AppCompatActivity() {
+    private val binding: ActivityWifiDirectBinding by lazy {
+        ActivityWifiDirectBinding.inflate(layoutInflater)
+    }
 
     private lateinit var peerListView: ListView
     private lateinit var peerAdapter: ArrayAdapter<String>
@@ -127,8 +139,7 @@ class WifiDirectActivity : AppCompatActivity() {
                     }
 
                     WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
-                        val networkInfo =
-                            intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
+                        val networkInfo = intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
 
                         if (networkInfo != null && networkInfo.isConnected) {
 //                            wifiP2pManager.requestConnectionInfo(channel) { info ->

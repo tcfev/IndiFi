@@ -14,6 +14,7 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WpsInfo
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
+import android.net.wifi.p2p.WifiP2pGroup
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
@@ -24,12 +25,19 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.databinding.ActivityWifiDirectScreen1Binding
+import org.fordem.indifi.ui.db.DeviceInfo
+import org.fordem.indifi.ui.db.DeviceInfoViewModel
 import org.fordem.indifi.ui.utils.Constants.isGOviaWFD
 import org.fordem.indifi.ui.utils.Constants.lastDeviceInfo
 import org.fordem.indifi.ui.utils.MessageRouterHelper
@@ -37,7 +45,12 @@ import org.fordem.indifi.ui.utils.MessageRouterHelper.isServiceBound
 import org.fordem.indifi.ui.utils.MessageRouterHelper.serviceConnection
 import org.fordem.indifi.ui.utils.MessageRouterService
 
+@Suppress("DEPRECATION")
+@SuppressLint("MissingPermission")
+@AndroidEntryPoint
 class WifiDirectScreen1Activity : AppCompatActivity() {
+    private val deviceViewModel: DeviceInfoViewModel by viewModels()
+
     private var currentP2pInfo: WifiP2pInfo? = null
     private val binding: ActivityWifiDirectScreen1Binding by lazy {
         ActivityWifiDirectScreen1Binding.inflate(layoutInflater)
@@ -55,7 +68,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             Manifest.permission.CHANGE_WIFI_STATE
         )
     }
-
 
     private val permissionRequestCode = 100
 
@@ -75,31 +87,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
     var gmName = ""
     var gmMac = ""
 
-//    private var messageRouterService: MessageRouterService? = null
-//    private var isServiceBound = false
-//    private val serviceConnection = object : ServiceConnection {
-//        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-//            val localBinder = binder as MessageRouterService.LocalBinder
-//            messageRouterService = localBinder.getService()
-//            isServiceBound = true
-//
-//            // You can now call service methods like:
-//            // messageRouterService?.startTcpServer(info, isGO)
-//
-////            messageRouterService?.startChatServer(
-////                context = this@WifiDirectScreen1Activity,
-////                onMessageReceived = {
-////                }
-////            )
-//            messageRouterService?.startSilentReceiver(this@WifiDirectScreen1Activity)
-////            messageRouterService?.startPrefSyncServer(this@WifiDirectScreen1Activity, currentP2pInfo!!)
-//        }
-//
-//        override fun onServiceDisconnected(name: ComponentName?) {
-//            messageRouterService = null
-//            isServiceBound = false
-//        }
-//    }
+    private lateinit var myMembersList: MutableCollection<WifiP2pDevice>
 
     override fun onStart() {
         super.onStart()
@@ -110,7 +98,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 
     }
 
-    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
@@ -124,10 +111,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         channel = wifiP2pManager.initialize(this, mainLooper, null)
         setupIntentFilter()
         setupReceiver()
-
-
-//        TcpHelper.startChatServer { _ ->
-//        }
 
         binding.btnDisconnect.setOnClickListener {
             wifiP2pManager.requestGroupInfo(channel) { group ->
@@ -294,33 +277,30 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 //                Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
 //            }
 
-            val deviceNumber = lastDeviceInfo.split(" ")[0].substringAfter(":")
-            val concatenate = lastDeviceInfo + "IP: $ip"
+//            val deviceNumber = lastDeviceInfo.split(" ")[0].substringAfter(":")
 
+            val lastMember = myMembersList.last()
+            val gmNumber = myMembersList.size + 1
+            gmName = lastMember.deviceName
+            gmMac = lastMember.deviceAddress
+            val timestamp = System.currentTimeMillis()
 
-            val sharedPref = getSharedPreferences("group_info", MODE_PRIVATE)
-
-            if (sharedPref.contains(gmMac)) {
-                Toast.makeText(this, "Preference Already Exists", Toast.LENGTH_SHORT).show()
-            } else {
-                sharedPref.edit().apply {
-                    putString(
-                        "GM_$deviceNumber",
-                        concatenate
-                    )
-                    apply()
-                }
+            deviceViewModel.viewModelScope.launch(Dispatchers.Main){
+                deviceViewModel.findRecentDevice(gmName, ip, timestamp)
+                    .observe(this@WifiDirectScreen1Activity) { existingDevice ->
+                        if (existingDevice == null) {
+                            val device = DeviceInfo(
+                                name = gmName,
+                                ip = ip,
+                                isGroupOwner = isGOviaWFD,
+                                timestamp = timestamp
+                            )
+                            deviceViewModel.insert(device)
+                        } else {
+                            Log.d("DB", "Device with name $gmName and IP $ip already added recently.")
+                        }
+                    }
             }
-
-//            // Broadcast all prefs
-//            val allPrefs = sharedPref.all.mapValues { it.value.toString() }
-//            val jsonData = JSONObject(allPrefs).toString()
-//
-////            Handler(Looper.myLooper()!!).postDelayed({
-//            TcpHelper.broadcastToGMs(jsonData)
-////            }, 20000)
-//
-////            TcpHelper.startSilentReceiver(this)
         }
     }
 
@@ -380,7 +360,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 
     private fun setupReceiver() {
         receiver = object : BroadcastReceiver() {
-            @SuppressLint("MissingPermission")
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
 
@@ -459,56 +438,17 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                     try {
                                         wifiP2pManager.requestGroupInfo(channel) { group ->
                                             if (group != null) {
-//                                                At this point, 2nd device is silently adding into the group, try to figureout how to check if the group
-//                                                already formed and get the 2nd device trying to connect.
                                                 isGOviaWFD = group.isGroupOwner
-                                                val myOwner =
-                                                    group.owner // The device who created the group
-                                                val myMembersList =
+//                                                val myOwner = group.owner // The device who created the group
+                                                myMembersList =
                                                     group.clientList // The list of devices attached to the group
 
                                                 if (isGOviaWFD) {
-//                                                Log.d(TAG, "I am the Group Owner.")
-//                                                Constants.deviceConnectionCallback(info.groupOwnerAddress.toString())
-
-                                                    val lastMember = myMembersList.last()
-                                                    val gmNumber = myMembersList.size
-                                                    gmName = lastMember.deviceName
-                                                    gmMac = lastMember.deviceAddress
-
-                                                    lastDeviceInfo =
-                                                        "DeviceNumber: $gmNumber DeviceName: $gmName DeviceAddress: $gmMac "
-
-
-                                                    MessageRouterHelper.messageRouterService?.startChatServer(
-                                                        context = this@WifiDirectScreen1Activity,
-                                                        onMessageReceived = {
-                                                        }
-                                                    )
-//                                                    TcpHelper.startChatServer(
-//                                                        lastDeviceInfo,
-//                                                        this@WifiDirectScreen1Activity,
-//                                                        isGO
-//                                                    ) { _ ->
-//
-//                                                    }
-
+                                                    collectGroupInfo(group)
+                                                    startServer()
                                                 } else {
                                                     isGOviaWFD = !group.isGroupOwner
-
-//                                                    val lastMember = myMembersList.last()
-//                                                    val gmNumber = myMembersList.size
-//                                                    val gmName = lastMember.deviceName
-//                                                    val gmMac = lastMember.deviceAddress
-//
-//                                                    lastDeviceInfo =
-//                                                        "DeviceNumber: $gmNumber" + "DeviceName: $gmName" + "DeviceAddress: $gmMac"
-
-                                                    MessageRouterHelper.messageRouterService?.startChatServer(
-                                                        context = this@WifiDirectScreen1Activity,
-                                                        onMessageReceived = {
-                                                        }
-                                                    )
+                                                    startServer()
 
                                                     val dummyIntent = Intent(
                                                         this@WifiDirectScreen1Activity,
@@ -522,28 +462,8 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                     }
                                                     startActivity(dummyIntent)
 
-//                                                    TcpHelper.startChatServer(
-//                                                        "",
-//                                                        this@WifiDirectScreen1Activity,
-//                                                        isNotGO
-//                                                    ) { _ ->
-//                                                    }
                                                     val goIP = info.groupOwnerAddress.hostAddress
                                                     Log.d(TAG, "I am Group Member. GO IP: $goIP")
-
-
-//                                                    goIP?.let {
-//                                                        sendMessageToGo(
-//                                                            it,
-//                                                            "Hello Pass This Message to the GO of other Group"
-//                                                        )
-//                                                    }
-
-//                                                    Handler(Looper.getMainLooper()).postDelayed({
-//                                                        messageRouterService?.startSilentReceiver(
-//                                                            applicationContext
-//                                                        )
-//                                                    }, 10000)
                                                 }
                                             } else {
                                                 Log.e(TAG, "Group is null.")
@@ -558,32 +478,17 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                 try {
                                                     wifiP2pManager.requestGroupInfo(channel) { group ->
                                                         if (group != null) {
-                                                            val isGO = group.isGroupOwner
-                                                            val myDevice =
-                                                                group.owner // The device who created the group
-
-                                                            val myMembersList =
+                                                            isGOviaWFD = group.isGroupOwner
+//                                                            val myDevice = group.owner // The device who created the group
+                                                            myMembersList =
                                                                 group.clientList // The list of devices attached to the group
 
-                                                            if (isGO) {
-//                                                Log.d(TAG, "I am the Group Owner.")
-//                                                Constants.deviceConnectionCallback(info.groupOwnerAddress.toString())
-
-                                                                val lastMember =
-                                                                    myMembersList.last()
-                                                                val gmNumber = myMembersList.size
-                                                                gmName = lastMember.deviceName
-                                                                gmMac = lastMember.deviceAddress
-
-                                                                lastDeviceInfo =
-                                                                    "DeviceNumber: $gmNumber DeviceName: $gmName DeviceAddress: $gmMac "
+                                                            if (isGOviaWFD) {
+                                                                collectGroupInfo(group)
+                                                                startServer()
                                                             } else {
-                                                                val goIP =
-                                                                    info.groupOwnerAddress.hostAddress
-                                                                Log.d(
-                                                                    TAG,
-                                                                    "I am Group Member. GO IP: $goIP"
-                                                                )
+                                                                isGOviaWFD = !group.isGroupOwner
+                                                                startServer()
 
                                                                 val dummyIntent = Intent(
                                                                     this@WifiDirectScreen1Activity,
@@ -600,21 +505,12 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                                 }
                                                                 startActivity(dummyIntent)
 
-//                                                                goIP?.let {
-//                                                                    sendMessageToGo(
-//                                                                        it,
-//                                                                        "New device connected"
-//                                                                    )
-//                                                                }
-
-//                                                                Handler(Looper.getMainLooper()).postDelayed(
-//                                                                    {
-//                                                                        messageRouterService?.startSilentReceiver(
-//                                                                            applicationContext
-//                                                                        )
-//                                                                    },
-//                                                                    10000
-//                                                                )
+                                                                val goIP =
+                                                                    info.groupOwnerAddress.hostAddress
+                                                                Log.d(
+                                                                    TAG,
+                                                                    "I am Group Member. GO IP: $goIP"
+                                                                )
                                                             }
                                                         } else {
                                                             Log.e(TAG, "Group is null.")
@@ -627,11 +523,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                     }, 2000)
                                 }
 
-                                MessageRouterHelper.messageRouterService?.startPrefSyncServer(
-                                    this@WifiDirectScreen1Activity,
-                                    currentP2pInfo!!
-                                )
-
+                                startSilentServer()
                             }
                         } else {
                             Log.d(TAG, "P2P connection dropped")
@@ -645,6 +537,63 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 
                 }
             }
+        }
+    }
+
+    private fun startSilentServer() {
+        MessageRouterHelper.messageRouterService?.startPrefSyncServer(
+            this@WifiDirectScreen1Activity,
+            currentP2pInfo!!
+        )
+    }
+
+    private fun startServer() {
+        MessageRouterHelper.messageRouterService?.startChatServer(
+            onMessageReceived = {
+            }
+        )
+    }
+
+    private fun collectGroupInfo(group: WifiP2pGroup) {
+        val owner = group.owner
+        val goName = group.networkName.substringAfterLast("-") //DIRECT-xT-Infinix SMART 6
+        val goMac = owner.deviceAddress
+        val goIP = currentP2pInfo!!.groupOwnerAddress.hostAddress
+        val timestamp = System.currentTimeMillis()
+
+//        val concatenate = "DeviceNumber: 1, DeviceName: $goName, DeviceIP: $goIP, $timestamp"
+//        val sharedPref = getSharedPreferences("group_info", MODE_PRIVATE)
+//        if (sharedPref.contains(concatenate)) {
+//            Toast.makeText(
+//                this@WifiDirectScreen1Activity,
+//                "Preference Already Exists",
+//                Toast.LENGTH_SHORT
+//            ).show()
+//        } else {
+//            sharedPref.edit().apply {
+//                putString(
+//                    "GO_$goIP",
+//                    concatenate
+//                )
+//                apply()
+//            }
+//        }
+
+        if (goIP != null) {
+            deviceViewModel.findRecentDevice(goName, goIP, timestamp)
+                .observe(this) { existingDevice ->
+                    if (existingDevice == null) {
+                        val device = DeviceInfo(
+                            name = goName,
+                            ip = goIP,
+                            isGroupOwner = isGOviaWFD,
+                            timestamp = timestamp
+                        )
+                        deviceViewModel.insert(device)
+                    } else {
+                        Log.d("DB", "Device with name $goName and IP $goIP already added recently.")
+                    }
+                }
         }
     }
 
