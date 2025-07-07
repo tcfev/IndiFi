@@ -29,7 +29,7 @@ object TcpHelper {
 //    private const val SILENTPORT = 8899
     private var clientSocket: Socket? = null
     private val clientSockets = mutableListOf<Socket>()
-    private var lastClientAddress: InetAddress? = null
+    var lastClientAddress: InetAddress? = null
     private val gmAddresses = mutableSetOf<Socket>()  // All connected GMs
     private var serverSocket: ServerSocket? = null
 

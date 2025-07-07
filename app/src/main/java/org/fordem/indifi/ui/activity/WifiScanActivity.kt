@@ -3,19 +3,22 @@ package org.fordem.indifi.ui.activity
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.content.*
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
-import android.net.*
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
-import android.net.wifi.p2p.WifiP2pInfo
-import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
@@ -25,25 +28,28 @@ import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ListView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.fordem.indifi.R
+import org.fordem.indifi.ui.db.DeviceInfoDao
+import org.fordem.indifi.ui.db.DeviceInfoViewModel
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
-import org.fordem.indifi.ui.utils.Constants.lastDeviceInfo
 import org.fordem.indifi.ui.utils.MessageRouterHelper
-import org.fordem.indifi.ui.utils.MessageRouterHelper.isServiceBound
-import org.fordem.indifi.ui.utils.MessageRouterHelper.serviceConnection
 import org.fordem.indifi.ui.utils.MessageRouterService
-import org.fordem.indifi.ui.utils.UdpListenerService
 import org.fordem.indifi.ui.utils.getHotspotGatewayIP
 import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import javax.inject.Inject
 
 class WifiScanActivity : AppCompatActivity() {
+    private val deviceViewModel: DeviceInfoViewModel by viewModels()
+    private val deviceInfoDao: DeviceInfoDao by viewModels()
+
 
     private lateinit var wifiManager: WifiManager
     private lateinit var wifiReceiver: BroadcastReceiver
@@ -140,20 +146,20 @@ class WifiScanActivity : AppCompatActivity() {
             startService(Intent(this, MessageRouterService::class.java)) // Done in onStart
 
             // This ensures GO listens for incoming socket messages
-            Handler(Looper.getMainLooper()).postDelayed({
-                MessageRouterHelper.messageRouterService?.startChatServer(
-                    onMessageReceived = { message ->
-                        runOnUiThread {
-                            Toast.makeText(
-                                this,
-                                message,
-                                Toast.LENGTH_SHORT
-                            )
-                                .show()
-                        }
-                    }
-                )
-            }, 3000)
+//            Handler(Looper.getMainLooper()).postDelayed({
+//                MessageRouterHelper.messageRouterService?.startChatServer(
+//                    onMessageReceived = { message ->
+//                        runOnUiThread {
+//                            Toast.makeText(
+//                                this,
+//                                message,
+//                                Toast.LENGTH_SHORT
+//                            )
+//                                .show()
+//                        }
+//                    }
+//                )
+//            }, 3000)
         }
     }
 

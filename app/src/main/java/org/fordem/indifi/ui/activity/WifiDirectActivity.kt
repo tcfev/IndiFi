@@ -205,12 +205,12 @@ class WifiDirectActivity : AppCompatActivity() {
 
                             wifiP2pManager.requestConnectionInfo(channel) { info ->
                                 if (info.groupFormed && info.groupOwnerAddress != null) {
-                                    launchChatActivity(info)
+//                                    launchChatActivity(info)
                                 } else {
                                     Handler(Looper.getMainLooper()).postDelayed({
                                         wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->
                                             if (retryInfo.groupFormed && retryInfo.groupOwnerAddress != null) {
-                                                launchChatActivity(retryInfo)
+//                                                launchChatActivity(retryInfo)
                                             }
                                         }
                                     }, 2000) // Wait 2 seconds
@@ -231,16 +231,16 @@ class WifiDirectActivity : AppCompatActivity() {
         }
     }
 
-    private fun launchChatActivity(info: WifiP2pInfo) {
-        if (info.groupFormed && info.groupOwnerAddress != null) {
-
-            val intent = Intent(this@WifiDirectActivity, ChatActivity::class.java).apply {
-                putExtra("isGroupOwner", info.isGroupOwner)
-                putExtra("groupOwnerAddress", info.groupOwnerAddress?.hostAddress)
-            }
-            startActivity(intent)
-        }
-    }
+//    private fun launchChatActivity(info: WifiP2pInfo) {
+//        if (info.groupFormed && info.groupOwnerAddress != null) {
+//
+//            val intent = Intent(this@WifiDirectActivity, ChatActivity::class.java).apply {
+//                putExtra("isGroupOwner", info.isGroupOwner)
+//                putExtra("groupOwnerAddress", info.groupOwnerAddress?.hostAddress)
+//            }
+//            startActivity(intent)
+//        }
+//    }
 
     private fun discoverPeers() {
         wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
