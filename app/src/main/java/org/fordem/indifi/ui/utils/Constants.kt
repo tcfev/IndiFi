@@ -7,7 +7,7 @@ import org.fordem.indifi.ui.model.PeerDevice
 object Constants {
 
     lateinit var DummyLCMessage: String
-    var ipLcGo: String? = null
+    lateinit var ipLcGo: String
     val connectedGMIPs = mutableSetOf<String>()
     val displayedPeersList = mutableListOf<PeerDevice>()
     val connectedDevicesList = mutableListOf<PeerDevice>()
@@ -16,9 +16,10 @@ object Constants {
 
 
     lateinit var deviceConnectionCallback: ((String) -> Unit)
-    lateinit var dummyLegacyClientCallback: ((String) -> Unit)
+    lateinit var legacyClientCallback: (() -> Unit)
     lateinit var peerPositionCallback: ((PeerDevice, Int) -> Unit)
     lateinit var openChatCallback: ((DeviceInfo) -> Unit)
+    lateinit var chatCallback: ((String) -> Unit)
 
     const val PORT = 8888
     const val SILENTPORT = 8889
@@ -26,4 +27,5 @@ object Constants {
 
     var isGOViaWFD = false
     var isGoViaLegacy = false
+    var isChatMessage = false
 }

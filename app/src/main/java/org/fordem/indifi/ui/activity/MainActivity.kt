@@ -1,24 +1,39 @@
 package org.fordem.indifi.ui.activity
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import org.fordem.indifi.databinding.ActivityMainBinding
 import org.fordem.indifi.ui.adapter.DeviceAdapter
+import org.fordem.indifi.ui.db.DeviceInfo
 import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.db.OwnDeviceInfo
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
+import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
+import org.fordem.indifi.ui.utils.Constants.legacyClientCallback
+import org.fordem.indifi.ui.utils.Constants.openChatCallback
 import org.fordem.indifi.ui.utils.MessageRouterHelper
-import org.fordem.indifi.ui.utils.MessageRouterHelper.serviceConnection
-import org.fordem.indifi.ui.utils.MessageRouterService
+import org.fordem.indifi.ui.utils.getOwnIp
+import org.fordem.indifi.ui.utils.isHotspotEnabled
+import org.json.JSONArray
+import org.json.JSONObject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -55,35 +70,81 @@ class MainActivity : AppCompatActivity() {
 //            }
 //        )
 
-        Constants.openChatCallback = { selectedDevice ->
+
+
+        openChatCallback = { selectedDevice ->
             lifecycleScope.launch {
-                val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
+                if (isGOViaWFD && !isGoViaLegacy/*selectedDevice.name != "GM_Device"*/) {
+                    val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
 
-                start form integrating chat class with getting ip from this screen
-
-                if (ownInfo != null) {
-                    isGOViaWFD = ownInfo.isGroupOwner
-                }
-                val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
-                    putExtra("device_ip", selectedDevice.ip)
-                    putExtra("device_name", selectedDevice.name)
                     if (ownInfo != null) {
-                        putExtra("groupOwnerAddress", ownInfo.ip)
-                    } // GO knows GM IP
+                        isGOViaWFD = ownInfo.isGroupOwner
+                    }
+                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
+                        putExtra("device_ip", selectedDevice.ip)
+                        putExtra("device_name", selectedDevice.name)
+                        if (ownInfo != null) {
+                            putExtra("groupOwnerAddress", ownInfo.ip)
+                        } // GO knows GM IP
 //                // Check if current device is GO and pass extra info if true
 //                if (selectedDevice.isGroupOwner) {
 //                    putExtra("isGroupOwner", true)
 //                    putExtra("groupOwnerAddress", selectedDevice.ip) // assuming IP is the host address
 //                }
 
-                    // Based on this device's role (not the selected device)
-                    if (isGOViaWFD || selectedDevice.ip != ownInfo?.ip) {
-                        putExtra("isGroupOwner", true)
-                    } else {
-                        putExtra("isGroupOwner", false)
+                        // Based on this device's role (not the selected device)
+                        if (isGOViaWFD || selectedDevice.ip != ownInfo?.ip) {
+                            putExtra("isGroupOwner", true)
+                        } else {
+                            putExtra("isGroupOwner", false)
+                        }
                     }
+                    startActivity(intent)
+                } else {
+                    val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
+
+                    if (ownInfo != null && ownInfo.isGroupOwner) {
+                        isGoViaLegacy = ownInfo.isGroupOwner
+                    }
+                    val allDevices = deviceInfoViewModel.allDevices.firstOrNull() ?: emptyList()
+
+                    // Find GO and selected device
+                    val goDevice = allDevices.find { it.isGroupOwner }
+                    val selectedInfo = allDevices.find { it.ip == selectedDevice.ip }
+
+                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
+                        putExtra("device_ip", selectedDevice.ip)
+                        putExtra("device_name", selectedDevice.name)
+
+
+                        // Check if selected device is GO
+                        if (selectedInfo?.isGroupOwner == true) {
+                            putExtra("isGroupOwner", false) // you're the GM
+                            putExtra("groupOwnerAddress", selectedDevice.ip)
+                        } else {
+                            putExtra("isGroupOwner", true)  // you're the GO
+                            putExtra("groupOwnerAddress", goDevice?.ip) // fallback
+                        }
+
+
+//                        if (ownInfo != null) {
+//                            putExtra("groupOwnerAddress", ownInfo.ip)
+//                        } // GO knows GM IP
+//                // Check if current device is GO and pass extra info if true
+//                if (selectedDevice.isGroupOwner) {
+//                    putExtra("isGroupOwner", true)
+//                    putExtra("groupOwnerAddress", selectedDevice.ip) // assuming IP is the host address
+//                }
+
+//                        // Based on this device's role (not the selected device)
+//                        if (isGOViaWFD || selectedDevice.ip != ownInfo?.ip) {
+//                            putExtra("isGroupOwner", true)
+//                        } else {
+//                            putExtra("isGroupOwner", false)
+//                        }
+                    }
+                    startActivity(intent)
                 }
-                startActivity(intent)
             }
         }
 
@@ -93,8 +154,11 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                deviceInfoViewModel.allDevices.collect { list ->
-                    adapter.submitList(list)
+                try {
+                    deviceInfoViewModel.allDevices.collect { list ->
+                        adapter.submitList(list)
+                    }
+                } catch (_: Exception) {
                 }
             }
         }
@@ -112,6 +176,39 @@ class MainActivity : AppCompatActivity() {
         }
 
 //        startMessageRouterService()
+
+
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isHotspotEnabled(this)) {
+            isGoViaLegacy = true
+        }
+
+//        lifecycleScope.launch {
+//            val deferredValue = async(Dispatchers.IO) { getOwnIp(this@MainActivity) }
+//            val ownIpGM = deferredValue.await()
+//            val ownName = Build.MODEL ?: "GM_Device"
+//
+//            deviceInfoViewModel.ownDeviceInfo.collect { existing ->
+//                if (existing == null ||
+//                    existing.name != ownName ||
+//                    existing.ip != ownIpGM ||
+//                    !existing.isGroupOwner
+//                ) {
+//                    val goInfo = OwnDeviceInfo(
+//                        name = ownName,
+//                        ip = ownIpGM!!,
+//                        isGroupOwner = true
+//                    )
+//                    deviceInfoViewModel.insertOwnDevice(goInfo)
+//                } else {
+//                    Log.d("OwnInfo", "Own GO info already up-to-date.")
+//                }
+//            }
+//        }
+
     }
 
     override fun onDestroy() {

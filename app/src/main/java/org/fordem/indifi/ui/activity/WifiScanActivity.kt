@@ -32,24 +32,44 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.fordem.indifi.R
+import org.fordem.indifi.ui.db.DeviceInfo
 import org.fordem.indifi.ui.db.DeviceInfoDao
 import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.db.OwnDeviceInfo
 import org.fordem.indifi.ui.utils.Constants
+import org.fordem.indifi.ui.utils.Constants.ipLcGo
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
+import org.fordem.indifi.ui.utils.Constants.legacyClientCallback
+import org.fordem.indifi.ui.utils.Constants.myMembersList
 import org.fordem.indifi.ui.utils.MessageRouterHelper
 import org.fordem.indifi.ui.utils.MessageRouterService
+import org.fordem.indifi.ui.utils.buildJsonForDeviceList
 import org.fordem.indifi.ui.utils.getHotspotGatewayIP
+import org.fordem.indifi.ui.utils.getOwnIp
+import org.fordem.indifi.ui.utils.isHotspotEnabled
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import javax.inject.Inject
 
+@AndroidEntryPoint
 class WifiScanActivity : AppCompatActivity() {
     private val deviceViewModel: DeviceInfoViewModel by viewModels()
-    private val deviceInfoDao: DeviceInfoDao by viewModels()
-
+//    private val deviceInfoDao: DeviceInfoDao by viewModels()
 
     private lateinit var wifiManager: WifiManager
     private lateinit var wifiReceiver: BroadcastReceiver
@@ -91,6 +111,8 @@ class WifiScanActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_wifi_scan)
 
+        isGoViaLegacy = true
+
         listView = findViewById(R.id.lvWifiList)
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, wifiList)
         listView.adapter = adapter
@@ -98,7 +120,8 @@ class WifiScanActivity : AppCompatActivity() {
         wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         wifiReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                val success = intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
+                val success =
+                    intent?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false) ?: false
                 if (success) {
                     showScanResults()
                 } else {
@@ -130,6 +153,124 @@ class WifiScanActivity : AppCompatActivity() {
             val ssid = ssidWithBssid.substringBefore(" - ")
             showPasswordDialog(ssid)
         }
+
+        legacyClientCallback = {
+            deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
+                try {
+////                    val deferredValue = async(Dispatchers.IO) {
+////                        val ownIp = getHotspotGatewayIP(this@WifiScanActivity)
+////                    }
+////                    val ownIp = deferredValue.await()
+////                    delay(5000)
+//                    val ownIp = getOwnIp(this@WifiScanActivity, isGroupOwner = true)
+//                    if (ownIp.isNullOrBlank() || ownIp == "0.0.0.0") {
+//                        Handler(Looper.getMainLooper()).post {
+//                            Toast.makeText(applicationContext, "GO: Failed to get own IP", Toast.LENGTH_SHORT).show()
+//                            Log.e("LEGACY_GO", "GO failed to detect own IP")
+//                        }
+//                        return@launch
+//                    }
+//
+//                    // ✅ Step 2: Save into global constant
+//                    Constants.ipLcGo = ownIp
+//                    Log.d("LEGACY_GO", "GO own IP: $ownIp")
+//
+//                    Handler(Looper.getMainLooper()).post {
+//                        Log.d("LEGACY_GO", ipLcGo.toString())
+//                    }
+//
+////                    if (ipLcGo.isNullOrBlank() || ipLcGo == "0.0.0.0") {
+//////                    Toast.makeText(
+//////                        applicationContext,
+//////                        "Failed to get valid IP",
+//////                        Toast.LENGTH_SHORT
+//////                    ).show()
+////
+////                        Handler(Looper.getMainLooper()).post {
+////                            Log.d("LEGACY_GO", "Failed to get vvalid IP")
+////                        }
+////                        return@launch
+////                    }
+//
+//                    val ownName = Build.MODEL ?: "GO_Device"
+//                    val timestamp = System.currentTimeMillis()
+//
+//
+////                    not saving go entery into the db, start investigating from here
+//
+//                    val duplicate = deviceViewModel.isDuplicateDevice(ownName, ipLcGo!!, timestamp)
+//                    if (!duplicate) {
+//                        val goDevice = DeviceInfo(
+//                            name = ownName,
+//                            ip = ipLcGo!!,
+//                            isGroupOwner = true,
+//                            timestamp = timestamp
+//                        )
+//                        deviceViewModel.insert(goDevice)
+//                        Handler(Looper.getMainLooper()).post({
+//                            Log.d("LEGACY_GO", "Saved own device info: $goDevice")
+//
+//                            Toast.makeText(applicationContext, "Saved own devvice info", Toast.LENGTH_SHORT).show()
+//                        })
+//                    }
+
+
+                    val allDevices = deviceViewModel.allDevices
+                    allDevices.collect { deviceList ->
+                        val dataToSend = buildJsonForDeviceList(deviceList)
+                        try {
+                            MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(
+                                dataToSend
+                            )
+                            Toast.makeText(applicationContext, "Info Broadcast", Toast.LENGTH_SHORT)
+                                .show()
+
+                        } catch (e: Exception) {
+                            Log.e("Broadcast", "Failed to send to: ${e.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("Broadcast", "Failed: ${e.message}")
+                }
+//                }
+            }
+        }
+
+//        legacyClientCallback = {
+//            deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
+//                try {
+//                    val ownIp = getOwnIp(this@WifiScanActivity, true) ?: return@launch
+//                    val ownName = Build.MODEL ?: "GO_Device"
+//                    val timestamp = System.currentTimeMillis()
+//
+//                    val duplicate = deviceViewModel.isDuplicateDevice(ownName, ownIp, timestamp)
+//                    if (!duplicate) {
+//                        val goDevice = DeviceInfo(
+//                            name = ownName,
+//                            ip = ownIp,
+//                            isGroupOwner = true,
+//                            timestamp = timestamp
+//                        )
+//                        deviceViewModel.insert(goDevice)
+//                        Log.d("LEGACY_GO", "Saved own device info: $goDevice")
+//                    }
+//
+//                    // Wait for DB insert to propagate
+//                    delay(300)
+//
+//                    // Use first() for one-time snapshot
+//                    val deviceList = deviceViewModel.allDevices.first()
+//
+//                    val dataToSend = buildJsonForDeviceList(deviceList)
+//                    MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(dataToSend)
+//
+//                    Log.d("LEGACY_GO", "Broadcasted device list to GMs: $dataToSend")
+//                } catch (e: Exception) {
+//                    Log.e("LEGACY_GO", "Error in legacyClientCallback: ${e.message}")
+//                }
+//            }
+//        }
+
     }
 
     override fun onStart() {
@@ -138,12 +279,31 @@ class WifiScanActivity : AppCompatActivity() {
 //        val intent = Intent(this, UdpListenerService::class.java)
 //        startService(intent)
 
-//        val connectedDevices = getConnectedDevicesFromARP()
+        val connectedDevices = getConnectedDevicesFromARP()
         if (isHotspotEnabled(this) /*&& connectedDevices.isNotEmpty()*/) {
             isGoViaLegacy = true
 
+//            val ownIp = getOwnIp(this, true) ?: return
+//            val ownName = Build.MODEL ?: "GO_Device"
+//            val timestamp = System.currentTimeMillis()
+//
+//            CoroutineScope(Dispatchers.IO).launch {
+//                val duplicate = deviceViewModel.isDuplicateDevice(ownName, ownIp, timestamp)
+//                if (!duplicate) {
+//                    val goDevice = DeviceInfo(
+//                        name = ownName,
+//                        ip = ownIp,
+//                        isGroupOwner = true,
+//                        timestamp = timestamp
+//                    )
+//                    deviceViewModel.insert(goDevice)
+//                    Log.d("LEGACY_GO", "Saved own device info: $goDevice")
+//                }
+//            }
+
+
 //            startUdpReceiverOnGO()
-            startService(Intent(this, MessageRouterService::class.java)) // Done in onStart
+//            startService(Intent(this, MessageRouterService::class.java)) // Done in onStart
 
             // This ensures GO listens for incoming socket messages
 //            Handler(Looper.getMainLooper()).postDelayed({
@@ -163,7 +323,7 @@ class WifiScanActivity : AppCompatActivity() {
         }
     }
 
-    fun getConnectedDevicesFromARP(): List<String> {
+    private fun getConnectedDevicesFromARP(): List<String> {
         val connectedIps = mutableListOf<String>()
         try {
             val arpFile = File("/proc/net/arp")
@@ -185,18 +345,17 @@ class WifiScanActivity : AppCompatActivity() {
         return connectedIps
     }
 
-    private fun isHotspotEnabled(context: Context): Boolean {
-        return try {
-            val wifiManager =
-                context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-            val method = wifiManager.javaClass.getDeclaredMethod("isWifiApEnabled")
-            method.isAccessible = true
-            method.invoke(wifiManager) as Boolean
-        } catch (e: Exception) {
-            false
-        }
-    }
-
+//    private fun isHotspotEnabled(context: Context): Boolean {
+//        return try {
+//            val wifiManager =
+//                context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+//            val method = wifiManager.javaClass.getDeclaredMethod("isWifiApEnabled")
+//            method.isAccessible = true
+//            method.invoke(wifiManager) as Boolean
+//        } catch (e: Exception) {
+//            false
+//        }
+//    }
 
     private fun ensureLocationEnabledAndScan() {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
@@ -290,30 +449,6 @@ class WifiScanActivity : AppCompatActivity() {
                             "Connected to $ssid",
                             Toast.LENGTH_SHORT
                         ).show()
-//                        MessageRouterHelper.sendHelloToGO(getHotspotGatewayIP()!!)
-
-//                        if (isGoViaLegacy) {
-//                            MessageRouterHelper.messageRouterService?.startChatServer(
-//                                context = this@WifiScanActivity,
-//                                onMessageReceived = { message ->
-////                                    runOnUiThread {
-////                                        Toast.makeText(this@WifiScanActivity, "Received in GM: $message", Toast.LENGTH_SHORT).show()
-////                                        // Handle incoming message here
-////                                    }
-//                                }
-//                            )
-//                        } else {
-//                            Handler(mainLooper).postDelayed({
-//                                MessageRouterHelper.messageRouterService?.sendMessageToServer(
-//                                    hostAddress = getHotspotGatewayIP(this@WifiScanActivity)!!,
-//                                    message = Constants.DummyLCMessage
-//                                )
-//
-//                            }, 5000)
-//                        }
-
-//                        startActivity(Intent(this@WifiScanActivity, ChatActivity::class.java))
-//                        finish()
                     }
                 }
 
@@ -330,39 +465,178 @@ class WifiScanActivity : AppCompatActivity() {
             connectivityManager.requestNetwork(request, networkCallback)
 
         } else {
-            // Android 9 and below
-            val conf = WifiConfiguration().apply {
-                SSID = "\"$ssid\""
-                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE) // Open network
-            }
+            deviceViewModel.viewModelScope.launch {
 
-            val wifiManager =
-                applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-            val netId = wifiManager.addNetwork(conf)
-            if (netId != -1) {
-                wifiManager.disconnect()
-                wifiManager.enableNetwork(netId, true)
-                wifiManager.reconnect()
 
-                Toast.makeText(this, "Connecting to $ssid...", Toast.LENGTH_SHORT).show()
+                val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+                // Remove existing config if already present
+                wifiManager.configuredNetworks.find { it.SSID == "\"$ssid\"" }?.let {
+                    wifiManager.removeNetwork(it.networkId)
+                }
+
+                // Android 9 and below
+                val conf = WifiConfiguration().apply {
+                    SSID = "\"$ssid\""
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE) // Open network
+                }
+
+                val netId = wifiManager.addNetwork(conf)
+                if (netId != -1) {
+                    wifiManager.disconnect()
+                    wifiManager.enableNetwork(netId, true)
+                    wifiManager.reconnect()
+
+                    Toast.makeText(
+                        this@WifiScanActivity,
+                        "Connecting to $ssid...",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+
+//                    val deferredValueGO =
+//                        async(Dispatchers.IO) { getOwnIp(applicationContext, true) }
+//                    val ownIpGO = deferredValueGO.await()
+////                    delay(5000)
+//                    if (ownIpGO.isNullOrBlank() || ownIpGO == "0.0.0.0") {
+////                    Toast.makeText(
+////                        applicationContext,
+////                        "Failed to get valid IP",
+////                        Toast.LENGTH_SHORT
+////                    ).show()
+//
+//                        Handler(Looper.getMainLooper()).post {
+//                            Log.d("LEGACY_GO", "Failed to get vvalid IP")
+//                        }
+//                        return@launch
+//                    }
+////                val ownIp = getOwnIp(context, true) ?: return@launch
+//                    val ownNameGO = /*Build.MODEL ?: */"GO_Device"
+//                    val timestampGO = System.currentTimeMillis()
+//                    val duplicate =
+//                        deviceViewModel.isDuplicateDevice(ownNameGO, ownIpGO, timestampGO)
+//                    if (!duplicate) {
+//                        val goDevice = DeviceInfo(
+//                            name = ownNameGO,
+//                            ip = ownIpGO,
+//                            isGroupOwner = true,
+//                            timestamp = timestampGO
+//                        )
+//                        deviceViewModel.insert(goDevice)
+//                        Handler(Looper.getMainLooper()).post {
+//                            Log.d("LEGACY_GO", "Saved own device info: $goDevice")
+//                        }
+//                    }
+
 
 //                Handler(mainLooper).postDelayed({
 //                    sendHelloPacketToGO()
 //                    MessageRouterHelper.sendHelloToGO(getHotspotGatewayIP()!!)
+
+//                    deviceViewModel.viewModelScope.launch {
+                    val deferredValue =
+                        async(Dispatchers.IO) { getOwnIp(this@WifiScanActivity) }
+                    val ownIpGM = deferredValue.await()
+//                    delay(5000)
+
+                    if (ownIpGM.isNullOrBlank() || ownIpGM == "0.0.0.0") {
+                        Toast.makeText(
+                            this@WifiScanActivity,
+                            "Failed to get valid IP",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
+                    val ownName = Build.MODEL ?: "GM_Device"
+                    val timestamp = System.currentTimeMillis()
+
+//                    val helloJson = """
+//                        {
+//                            \"type\": \"HELLO\",
+//                            \"name\": \"$ownName\",
+//                            \"ip\": \"$ownIpGM\",
+//                            \"isGroupOwner\": false,
+//                            \"timestamp\": $timestamp
+//                        }
+//                    """.trimIndent()
+
+                    val goIp = getHotspotGatewayIP(this@WifiScanActivity)
+                    val goName = "GO_Device" // Or fetch from SSID / any other logic
+                    val goTimestamp = timestamp - 1  // Just to keep some order
+
+                    if (goIp.isNullOrBlank()) {
+                        Toast.makeText(
+                            this@WifiScanActivity,
+                            "Failed to get GO IP",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
+
+
+                    val deviceArray = JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("name", ownName)
+                            put("ip", ownIpGM)
+                            put("isGroupOwner", false)
+                            put("timestamp", timestamp)
+                        })
+
+                        put(JSONObject().apply {
+                            put("name", goName)
+                            put("ip", goIp)
+                            put("isGroupOwner", true)
+                            put("timestamp", goTimestamp)
+                        })
+                    }
+
+                    val helloJson = JSONObject().apply {
+                        put("type", "HELLO")
+                        put("devices", deviceArray)
+                    }.toString()
+
+//                little more delay here
+
                     Handler(mainLooper).postDelayed({
+                        val gatewayIp = getHotspotGatewayIP(this@WifiScanActivity)
+                        if (gatewayIp.isNullOrBlank() || gatewayIp == "0.0.0.0") {
+                            Log.e("GM_HELLO", "Gateway IP is invalid. Cannot send HELLO.")
+                            return@postDelayed
+                        }
+
+                        Constants.ipLcGo = gatewayIp
+                        Log.d("GM_HELLO", "Sending HELLO to: $gatewayIp")
+                        Log.d("GM_HELLO", "HELLO JSON: $helloJson")
 
                         MessageRouterHelper.messageRouterService?.sendMessageToServer(
-                            hostAddress = getHotspotGatewayIP(this)!!,
-                            message = /*Constants.DummyLCMessage*/ "Hello Mr. Arman"
+                            hostAddress = gatewayIp,
+                            message = helloJson
                         )
+                    }, 500)
 
-                    }, 5000)
-//                    MessageRouterService.sendMessageToServer
-//                    startActivity(Intent(this, ChatActivity::class.java))
-//                    finish()
-//                }, 4000)
-            } else {
-                Toast.makeText(this, "Failed to add open network $ssid", Toast.LENGTH_SHORT).show()
+
+//                    Handler(mainLooper).postDelayed({
+//                        Log.d(
+//                            "GM_HELLO",
+//                            "Sending HELLO to: ${getHotspotGatewayIP(this@WifiScanActivity)}"
+//                        )
+//                        Log.d("GM_HELLO", "HELLO JSON: $helloJson")
+//
+//                        MessageRouterHelper.messageRouterService?.sendMessageToServer(
+//                            hostAddress = getHotspotGatewayIP(this@WifiScanActivity)!!,
+//                            message = /*Constants.DummyLCMessage*/ /*"New device connected"*/ helloJson
+//                        )
+//                    }, 500)
+//                    }
+                } else {
+                    Toast.makeText(
+                        this@WifiScanActivity,
+                        "Failed to add open network $ssid",
+                        Toast.LENGTH_SHORT
+                    )
+                        .show()
+                }
             }
         }
     }
@@ -412,13 +686,14 @@ class WifiScanActivity : AppCompatActivity() {
         super.onDestroy()
         unregisterReceiver(wifiReceiver)
 
+        isGoViaLegacy = false
 //        if (isServiceBound) {
 //            unbindService(serviceConnection)
 //            isServiceBound = false
 //        }
     }
 
-    // GO Side - Call this method in GO's main activity to listen for incoming GM HELLO
+// GO Side - Call this method in GO's main activity to listen for incoming GM HELLO
 //    fun startListeningForGMHello(context: Context) {
 //        Thread {
 //            try {

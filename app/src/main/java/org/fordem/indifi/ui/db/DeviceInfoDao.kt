@@ -19,7 +19,7 @@ interface DeviceInfoDao {
     @Query("DELETE FROM device_info WHERE deviceId = :deviceId")
     suspend fun deleteById(deviceId: String)
 
-    @Query("SELECT * FROM device_info ORDER BY timestamp DESC")
+    @Query("SELECT * FROM device_info ORDER BY timestamp DESC LIMIT 100")
     fun getAllDevices(): Flow<List<DeviceInfo>>
 
     @Query("SELECT * FROM device_info")
@@ -53,5 +53,13 @@ interface DeviceInfoDao {
 
     @Query("SELECT * FROM own_device_info WHERE id = 1 LIMIT 1")
     suspend fun getOwnInfoDirect(): OwnDeviceInfo?
+
+    @Query("SELECT COUNT(*) FROM device_info WHERE name = :name AND ip = :ip AND ABS(timestamp - :timestamp) < :timeWindow")
+    suspend fun isDuplicateDevice(
+        name: String,
+        ip: String,
+        timestamp: Long,
+        timeWindow: Long = 5 * 60 * 1000 // 5 min
+    ): Boolean
 
 }

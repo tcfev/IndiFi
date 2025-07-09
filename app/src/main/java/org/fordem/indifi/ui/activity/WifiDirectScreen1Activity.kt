@@ -297,26 +297,26 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                     deviceViewModel.insert(device)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        val allDevices = deviceViewModel.allDevices
-
-
-                        allDevices.collect { deviceList ->
+                        try {
+                            val allDevices = deviceViewModel.allDevices
+                            allDevices.collect { deviceList ->
 //                            val ip = device.ip
-                            val dataToSend = buildJsonForDeviceList(deviceList)
+                                val dataToSend = buildJsonForDeviceList(deviceList)
 
-                            try {
-                                MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(
-                                    dataToSend
-                                )
+                                try {
+                                    MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(
+                                        dataToSend
+                                    )
 
 //                                    MessageRouterHelper.messageRouterService?.sendMessageToServer(
 //                                        ip,
 //                                        dataToSend
 //                                    )
-                            } catch (e: Exception) {
-                                Log.e("Broadcast", "Failed to send to: ${e.message}")
+                                } catch (e: Exception) {
+                                    Log.e("Broadcast", "Failed to send to: ${e.message}")
+                                }
                             }
-                        }
+                        } catch (_: Exception){}
                     }
 
                 } else {
@@ -330,11 +330,11 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 //        }
         }
 
-        Constants.dummyLegacyClientCallback = {
-            deviceViewModel.viewModelScope.launch(Dispatchers.Main) {
-                Toast.makeText(this@WifiDirectScreen1Activity, it, Toast.LENGTH_SHORT).show()
-            }
-        }
+//        Constants.dummyLegacyClientCallback = {
+//            deviceViewModel.viewModelScope.launch(Dispatchers.Main) {
+//                Toast.makeText(this@WifiDirectScreen1Activity, it, Toast.LENGTH_SHORT).show()
+//            }
+//        }
     }
 
 //    private fun buildJsonForDevice(device: DeviceInfo): String {
@@ -564,8 +564,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                             5000
                                                         ) // at least 7 seconds required to connect to server
                                                     }
-
-
                                                 }
                                             } else {
                                                 Log.e(TAG, "Group is null.")

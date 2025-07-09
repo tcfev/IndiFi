@@ -12,6 +12,8 @@ import androidx.appcompat.app.AppCompatActivity
 import org.fordem.indifi.R
 import org.fordem.indifi.ui.adapter.MessageAdapter
 import org.fordem.indifi.ui.model.Message
+import org.fordem.indifi.ui.utils.Constants
+import org.fordem.indifi.ui.utils.Constants.isChatMessage
 import org.fordem.indifi.ui.utils.MessageRouterHelper
 
 class ChatActivity : AppCompatActivity() {
@@ -58,6 +60,7 @@ class ChatActivity : AppCompatActivity() {
 
                 if (groupOwnerAddress != gm_ip) {
                     if (isGroupOwner) {
+                        isChatMessage = true
                         MessageRouterHelper.messageRouterService?.sendMessageToClient(
                             msg,
                             gm_ip!!
@@ -65,6 +68,8 @@ class ChatActivity : AppCompatActivity() {
 //                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
                     } else {
                         groupOwnerAddress?.let {
+                            isChatMessage = true
+
 //                        TcpHelper.sendMessageToServer(it, msg)
                             MessageRouterHelper.messageRouterService?.sendMessageToServer(it, msg)
                         } //Send to GO
@@ -89,6 +94,13 @@ class ChatActivity : AppCompatActivity() {
 
 
                 inputField.text.clear()
+            }
+        }
+
+        Constants.chatCallback = {
+            runOnUiThread {
+                messages.add(Message(it, false))
+                adapter.notifyDataSetChanged()
             }
         }
     }
