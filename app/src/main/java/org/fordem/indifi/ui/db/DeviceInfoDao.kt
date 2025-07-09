@@ -3,6 +3,7 @@ package org.fordem.indifi.ui.db
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import org.fordem.indifi.ui.model.ChatMessage
 
 @Dao
 interface DeviceInfoDao {
@@ -61,5 +62,4 @@ interface DeviceInfoDao {
         timestamp: Long,
         timeWindow: Long = 5 * 60 * 1000 // 5 min
     ): Boolean
-
 }

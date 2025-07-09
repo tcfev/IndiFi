@@ -15,6 +15,11 @@ object DatabaseModule {
 
     @Provides
     @Singleton
+    fun provideChatMessageDao(appDatabase: AppDatabase): ChatMessageDao {
+        return appDatabase.chatMessageDao()
+    }
+    @Provides
+    @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(
             context,

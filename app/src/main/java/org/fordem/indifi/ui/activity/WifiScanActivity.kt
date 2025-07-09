@@ -417,6 +417,7 @@ class WifiScanActivity : AppCompatActivity() {
             .show()
     }
 
+    @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")
     private fun connectToWifi(ssid: String/*, capabilities: String*/) {
 //        if (!capabilities.contains("OPEN", ignoreCase = true) && !capabilities.contains("ESS")) {
@@ -605,7 +606,7 @@ class WifiScanActivity : AppCompatActivity() {
                             return@postDelayed
                         }
 
-                        Constants.ipLcGo = gatewayIp
+//                        ipLcGo = gatewayIp
                         Log.d("GM_HELLO", "Sending HELLO to: $gatewayIp")
                         Log.d("GM_HELLO", "HELLO JSON: $helloJson")
 

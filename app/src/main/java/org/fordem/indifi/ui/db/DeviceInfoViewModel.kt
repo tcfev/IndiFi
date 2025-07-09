@@ -17,6 +17,9 @@ class DeviceInfoViewModel @Inject constructor(
 
     val allDevices: Flow<List<DeviceInfo>> = dao.getAllDevices().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+//    val allMessages = dao.getAllMessages()
+//        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+
     suspend fun getOwnInfoDirect(): OwnDeviceInfo? {
         return dao.getOwnInfoDirect()
     }

@@ -7,15 +7,25 @@ import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import org.fordem.indifi.R
 import org.fordem.indifi.ui.adapter.MessageAdapter
+import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.model.ChatMessage
 import org.fordem.indifi.ui.model.Message
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.ui.utils.Constants.isChatMessage
 import org.fordem.indifi.ui.utils.MessageRouterHelper
+import org.fordem.indifi.ui.viewmodel.ChatViewModel
 
+@AndroidEntryPoint
 class ChatActivity : AppCompatActivity() {
 
     private lateinit var listView: ListView
@@ -28,6 +38,8 @@ class ChatActivity : AppCompatActivity() {
     private var gm_ip: String? = null
     private var groupOwnerAddress: String? = null
     private var isGroupOwner = false
+    private val deviceInfoViewModel: DeviceInfoViewModel by viewModels()
+    private val chatViewModel: ChatViewModel by viewModels()
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +60,16 @@ class ChatActivity : AppCompatActivity() {
         isGroupOwner = intent.getBooleanExtra("isGroupOwner", false)
         groupOwnerAddress = intent.getStringExtra("groupOwnerAddress")
 
+        chatViewModel.viewModelScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                chatViewModel.allMessages.collect { savedMessages ->
+                    messages.clear()
+                    messages.addAll(savedMessages.map { Message(it.message, it.isIncoming) })
+                    adapter.notifyDataSetChanged()
+                }
+            }
+        }
+
         sendButton.setOnClickListener {
             val msg = inputField.text.toString()
             if (msg.isNotBlank()) {
@@ -57,6 +79,9 @@ class ChatActivity : AppCompatActivity() {
 //                if (groupOwnerAddress != null) {
 //                    TcpHelper.sendMessageToServer(groupOwnerAddress.toString(), msg)
 //                }
+
+                val chat = ChatMessage(senderName = getDeviceName(), senderIp = gm_ip.toString(), message = msg, timestamp = System.currentTimeMillis(), isIncoming = true)
+                chatViewModel.insertMessage(chat)
 
                 if (groupOwnerAddress != gm_ip) {
                     if (isGroupOwner) {
@@ -101,6 +126,9 @@ class ChatActivity : AppCompatActivity() {
             runOnUiThread {
                 messages.add(Message(it, false))
                 adapter.notifyDataSetChanged()
+
+                val chat = ChatMessage(senderName = getDeviceName(), senderIp = gm_ip.toString(), message = it, timestamp = System.currentTimeMillis(), isIncoming = true)
+                chatViewModel.insertMessage(chat)
             }
         }
     }
