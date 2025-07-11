@@ -55,6 +55,16 @@
         app:layout_constraintTop_toBottomOf="@id/btnLegacyWifi"
         app:layout_constraintWidth_percent="0.85" />
 
+<!--    <Button-->
+<!--        android:id="@+id/btnTest"-->
+<!--        android:layout_width="0dp"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:text="Test Screen"-->
+<!--        app:layout_constraintEnd_toEndOf="parent"-->
+<!--        app:layout_constraintStart_toStartOf="parent"-->
+<!--        app:layout_constraintTop_toBottomOf="@+id/btnListHotspots"-->
+<!--        app:layout_constraintWidth_percent="0.85" />-->
+
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"

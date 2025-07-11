@@ -30,4 +30,9 @@ object DatabaseModule {
 
     @Provides
     fun provideDeviceInfoDao(db: AppDatabase): DeviceInfoDao = db.deviceInfoDao()
+
+    @Provides
+    fun providePeerPublicKeyDao(database: AppDatabase): PeerPublicKeyDao {
+        return database.peerPublicKeyDao()
+    }
 }

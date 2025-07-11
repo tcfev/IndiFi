@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,17 +24,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.fordem.indifi.R
-import org.fordem.indifi.ui.db.DeviceInfo
+import org.fordem.indifi.ui.db.AppDatabase
+import org.fordem.indifi.ui.model.DeviceInfo
 import org.fordem.indifi.ui.db.DeviceInfoDao
+import org.fordem.indifi.ui.db.PeerPublicKeyDao
+import org.fordem.indifi.ui.encryption.AESGCMHelper
+import org.fordem.indifi.ui.encryption.KeyStoreManager
+import org.fordem.indifi.ui.model.PeerPublicKeyEntity
 import org.fordem.indifi.ui.utils.Constants.PORT
 import org.fordem.indifi.ui.utils.Constants.PREF_SYNC_PORT
-import org.fordem.indifi.ui.utils.Constants.SILENTPORT
 import org.fordem.indifi.ui.utils.Constants.connectedGMIPs
 import org.fordem.indifi.ui.utils.Constants.deviceConnectionCallback
 import org.fordem.indifi.ui.utils.Constants.ipLcGo
-import org.fordem.indifi.ui.utils.Constants.isChatMessage
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
-import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
 import org.fordem.indifi.ui.utils.Constants.legacyClientCallback
 import org.json.JSONArray
 import org.json.JSONObject
@@ -54,19 +57,20 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MessageRouterService : Service() {
-    //    private var clientSocket: Socket? = null
     private val clientSockets = mutableListOf<Socket>()
     private var lastClientAddress: InetAddress? = null
     private val gmAddresses = mutableSetOf<Socket>()  // All connected GMs
     private var serverSocket: ServerSocket? = null
 
-    //    private var sharedAESKey: SecretKey? = null
-//    private val peerAESKeys = mutableMapOf<String, SecretKey>()
+    val peerAESKeys = mutableMapOf<String, SecretKey>()
     private var isServerRunning = false
     private val binder = LocalBinder()
 
     @Inject
     lateinit var deviceInfoDao: DeviceInfoDao
+
+    @Inject
+    lateinit var peerPublicKeyDao: PeerPublicKeyDao
 
     inner class LocalBinder : Binder() {
         fun getService(): MessageRouterService = this@MessageRouterService
@@ -85,16 +89,13 @@ class MessageRouterService : Service() {
             startForeground(101, notification)
         }
 
-//        deviceInfoDao = DeviceInfoDao
 
-
-        // 🟢 Start listening here
+        // Start listening here
         startChatServer(
             onMessageReceived = { message ->
                 Log.d("SERVICE", "Message received at startup: $message")
                 // Handle message if needed
 
-//                Constants.chatCallback(message)
             }
         )
     }
@@ -128,14 +129,10 @@ class MessageRouterService : Service() {
 
                 while (true) {
                     val clientSocket = serverSocket!!.accept()
-//                    delay(1000)
-
                     clientSockets.add(clientSocket)
-
                     lastClientAddress = clientSocket.inetAddress  // ← Save GM's IP
                     gmAddresses.add(clientSocket)
                     connectedGMIPs.add(clientSocket.inetAddress.hostAddress!!) // Save GM IP
-//                    delay(1000)
 
                     if (isGOViaWFD) {
                         deviceConnectionCallback(
@@ -143,8 +140,6 @@ class MessageRouterService : Service() {
                         )
                     }
                     Log.d("TCP", "Client connected: ${clientSocket.inetAddress.hostAddress}")
-//                    delay(1000)
-
                     handleClient(clientSocket, onMessageReceived)
                 }
             } catch (e: IOException) {
@@ -153,488 +148,392 @@ class MessageRouterService : Service() {
         }
     }
 
-//    fun startClientReceiver(context: Context) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            serverSocket = ServerSocket(PORT)
-//            val socket = serverSocket?.accept()
+//    fun startPrefSyncServer(context: Context, info: WifiP2pInfo) {
+////        CoroutineScope(Dispatchers.IO).launch {
+////            try {
+////                val serverSocket = ServerSocket(8888)
+////                while (true) {
+////                    val socket = serverSocket.accept()
+////                    val gmIP = socket.inetAddress.hostAddress ?: continue
+////                    connectedGMIPs.add(gmIP)
+////                    Log.d("GO_SERVER", "GM connected from $gmIP")
+////
+////                    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+////                    val message = reader.readLine()
+////                    Log.d("GO_SERVER", "Received: $message")
+////
+////                    // Optionally respond or update prefs here
+////
+////                    socket.close()
+////                }
+////            } catch (e: Exception) {
+////                Log.e("GO_SERVER", "Error in TCP server", e)
+////            }
+////        }
 //
-//            BufferedReader(InputStreamReader(socket!!.getInputStream())).use { reader ->
-//                var line: String?
-//                while (reader.readLine().also { line = it } != null) {
-//                    Log.d("TCP", "Received Pref JSON: $line")
-//                    val json = JSONObject(line!!)
-//                    val prefs = context.getSharedPreferences("group_info", MODE_PRIVATE).edit()
-//                    json.keys().forEach { key ->
-//                        prefs.putString(key, json.getString(key))
+//
+//        if (info.groupOwnerAddress == null) {
+//            Log.e("TCP_SYNC", "Group owner address is null. Aborting sync setup.")
+//            return
+//        }
+//
+//        val goIp = info.groupOwnerAddress.hostAddress ?: return
+//
+//        if (info.isGroupOwner) {
+//            // GO Device: Start server
+//            if (isServerRunning) return
+//
+//            isServerRunning = true
+//
+//            CoroutineScope(Dispatchers.IO).launch {
+//                try {
+//                    serverSocket = ServerSocket(/*8888*/PREF_SYNC_PORT)
+//                    Log.d("TCP_SYNC", "GO Server started on port 8888")
+//
+//                    while (true) {
+//                        val socket = serverSocket!!.accept()
+//                        val remoteIP = socket.inetAddress.hostAddress
+//                        val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+//                        val message = reader.readLine()
+//
+//                        Log.d("TCP_SYNC", "Received from $remoteIP: $message")
+//
+//                        if (remoteIP != null) connectedGMIPs.add(remoteIP)
+//                        socket.close()
 //                    }
-//                    prefs.apply()
+//                } catch (e: Exception) {
+//                    Log.e("TCP_SYNC", "GO Server error", e)
 //                }
 //            }
-//        }
-//    }
 //
-//    fun startSilentReceiver(context: Context) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            try {
-//                serverSocket = ServerSocket(SILENTPORT) // Use a separate port for silent sync
-//                while (true) {
-//                    val socket = serverSocket!!.accept()
-//                    CoroutineScope(Dispatchers.IO).launch {
-//                        try {
-//                            socket.soTimeout = 5000
-//                            socket.use {
-//                                val msg = it.getInputStream().bufferedReader().readLine()
-//                                if (msg.startsWith("PREF_UPDATE:")) {
-//                                    val json = msg.removePrefix("PREF_UPDATE:")
-//                                    val prefs =
-//                                        context.getSharedPreferences(
-//                                            "group_info",
-//                                            MODE_PRIVATE
-//                                        )
-//                                    val jsonObject = JSONObject(json)
-//                                    val editor = prefs.edit()
-//                                    jsonObject.keys().forEach { key ->
-//                                        editor.putString(key, jsonObject.getString(key))
-//                                    }
-//                                    editor.apply()
-//                                    Log.d("TCP", "Silent prefs synced: $json")
-//                                }
-//                            }
-//                        } catch (e: Exception) {
-//                            Log.e("TCP", "Silent receiver socket error: ${e.message}")
-//                        } finally {
-//                            try {
-//                                socket.close()
-//                            } catch (_: Exception) {
-//                            }
-//                        }
-//                    }
-//                }
-//            } catch (e: Exception) {
-//                Log.e("TCP", "Silent receiver failed to start: ${e.message}")
-//            }
-//        }
-//    }
-
-    fun startPrefSyncServer(context: Context, info: WifiP2pInfo) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            try {
-//                val serverSocket = ServerSocket(8888)
-//                while (true) {
-//                    val socket = serverSocket.accept()
-//                    val gmIP = socket.inetAddress.hostAddress ?: continue
-//                    connectedGMIPs.add(gmIP)
-//                    Log.d("GO_SERVER", "GM connected from $gmIP")
+//        } else {
+//            // GM Device: Send HELLO message to GO
+//            CoroutineScope(Dispatchers.IO).launch {
+//                try {
+//                    Log.d("TCP_SYNC", "GM sending HELLO to GO at $goIp:8888")
 //
-//                    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-//                    val message = reader.readLine()
-//                    Log.d("GO_SERVER", "Received: $message")
-//
-//                    // Optionally respond or update prefs here
-//
+//                    val socket = Socket(goIp, /*8888*/PORT)
+//                    val writer = PrintWriter(socket.getOutputStream(), true)
+//                    writer.println("HELLO_FROM_${Build.MODEL}")
+//                    writer.flush()
 //                    socket.close()
+//
+//                    Log.d("TCP_SYNC", "HELLO sent to GO at $goIp")
+//                } catch (e: Exception) {
+//                    Log.e("TCP_SYNC", "GM failed to connect to GO", e)
 //                }
-//            } catch (e: Exception) {
-//                Log.e("GO_SERVER", "Error in TCP server", e)
 //            }
 //        }
+//    }
 
-
-        if (info.groupOwnerAddress == null) {
-            Log.e("TCP_SYNC", "Group owner address is null. Aborting sync setup.")
-            return
-        }
-
-        val goIp = info.groupOwnerAddress.hostAddress ?: return
-
-        if (info.isGroupOwner) {
-            // GO Device: Start server
-            if (isServerRunning) return
-
-            isServerRunning = true
-
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    serverSocket = ServerSocket(/*8888*/PREF_SYNC_PORT)
-                    Log.d("TCP_SYNC", "GO Server started on port 8888")
-
-                    while (true) {
-                        val socket = serverSocket!!.accept()
-                        val remoteIP = socket.inetAddress.hostAddress
-                        val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-                        val message = reader.readLine()
-
-                        Log.d("TCP_SYNC", "Received from $remoteIP: $message")
-
-                        if (remoteIP != null) connectedGMIPs.add(remoteIP)
-                        socket.close()
-                    }
-                } catch (e: Exception) {
-                    Log.e("TCP_SYNC", "GO Server error", e)
-                }
-            }
-
-        } else {
-            // GM Device: Send HELLO message to GO
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    Log.d("TCP_SYNC", "GM sending HELLO to GO at $goIp:8888")
-
-                    val socket = Socket(goIp, /*8888*/PORT)
-                    val writer = PrintWriter(socket.getOutputStream(), true)
-                    writer.println("HELLO_FROM_${Build.MODEL}")
-                    writer.flush()
-                    socket.close()
-
-                    Log.d("TCP_SYNC", "HELLO sent to GO at $goIp")
-                } catch (e: Exception) {
-                    Log.e("TCP_SYNC", "GM failed to connect to GO", e)
-                }
-            }
-        }
-    }
 
     private fun handleClient(
         socket: Socket,
         onMessageReceived: (String) -> Unit
     ) {
         CoroutineScope(Dispatchers.IO).launch {
-//            delay(1000)
-
             try {
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 var line: String?
-//                delay(1000)
-
 
                 while (reader.readLine().also { line = it } != null) {
-                    Log.d("TCP", "Received: $line")
-                    Handler(Looper.getMainLooper()).post {
-                        Log.d("GO_RECEIVER", "Received raw line: $line")
+                    Log.d("TCP", "Received (raw): $line")
+
+                    // Attempt to decrypt if JSON has "ciphertext" and "iv"
+                    val lineStr = try {
+                        val obj = JSONObject(line)
+                        if (obj.has("ciphertext") && obj.has("iv")) {
+                            val senderIp = socket.inetAddress.hostAddress!!
+                            val aesKey = peerAESKeys[senderIp]
+                            if (aesKey != null) {
+                                val decrypted = AESGCMHelper.decrypt(
+                                    aesKey,
+                                    Base64.decode(obj.getString("ciphertext"), Base64.NO_WRAP),
+                                    Base64.decode(obj.getString("iv"), Base64.NO_WRAP)
+                                )
+                                Log.d("DECRYPT", "Decrypted from $senderIp: $decrypted")
+                                decrypted
+                            } else {
+                                Log.w("DECRYPT", "No AES key for $senderIp")
+                                line
+                            }
+                        } else {
+                            line
+                        }
+                    } catch (e: Exception) {
+                        Log.e("DECRYPT", "Failed to parse or decrypt: ${e.message}")
+                        line
                     }
 
-//                    if (isGOViaWFD) {
-//                        Constants.DummyLCMessage = line.toString()
-//
-////                        Handler(Looper.getMainLooper()).post {
-////                            Toast.makeText(applicationContext, "$line", Toast.LENGTH_SHORT).show()
-////                        }
-//
-//                        if (line.toString().isNotEmpty() && isChatMessage) {
-//                            //For WFD chat
-//                            Handler(Looper.getMainLooper()).post {
-//                                // You can either use onMessageReceived or Constants.chatCallback
-//                                Constants.chatCallback(line.toString())
-//                            }
-//                        }
-//
-//
-////                        // For Legacy Wifi Network
-////                        if (line.toString().isNotEmpty() && line.toString().isNotBlank()) {
-////                            Handler(mainLooper).postDelayed({
-////                                ipLcGo?.let {
-////                                    MessageRouterHelper.messageRouterService?.sendMessageToServer(
-////                                        hostAddress = /*getHotspotGatewayIP(context)!!*/ it,
-////                                        message = Constants.DummyLCMessage /*line.toString()*/
-////                                    )
-////                                }
-////
-////                            }, 5000)
-////                        }
-//
-////                        delay(1000)
-//
-//                    }
-//                    else if (isGoViaLegacy) {
-//                        try {
-                            val lineStr = line.toString()
-//                            delay(1000)
+                    try {
+                        when {
+                            lineStr!!.startsWith("DEVICE_LIST:") -> {
+                                val jsonArrayString = lineStr.removePrefix("DEVICE_LIST:")
+                                val jsonArray = JSONArray(jsonArrayString)
+                                val parsedDevices = mutableListOf<DeviceInfo>()
 
-                            when {
-                                lineStr.startsWith("DEVICE_LIST:") -> {
-                                    // Handle full device list
-                                    val jsonArrayString = lineStr.removePrefix("DEVICE_LIST:")
-                                    val jsonArray = JSONArray(jsonArrayString)
-                                    val parsedDevices = mutableListOf<DeviceInfo>()
-
-                                    for (i in 0 until jsonArray.length()) {
-                                        val obj = jsonArray.getJSONObject(i)
-                                        val device = DeviceInfo(
-                                            deviceId = obj.optInt("deviceId"),
-                                            name = obj.getString("name"),
-                                            ip = obj.getString("ip"),
-                                            isGroupOwner = /*false*/obj.getBoolean("isGroupOwner"), // Always false for GM
-                                            timestamp = obj.getLong("timestamp")
-                                        )
-                                        parsedDevices.add(device)
-                                    }
-
-                                    parsedDevices.forEach { device ->
-                                        val exists =
-                                            isDuplicateDevice(
-                                                device.name,
-                                                device.ip,
-                                                device.timestamp
-                                            )
-                                        if (!exists) {
-                                            deviceInfoDao.insertDevice(device)
-                                        }
-                                    }
-
-                                    Log.d(
-                                        "GM_RECEIVER",
-                                        "Parsed DEVICE_LIST broadcast: $parsedDevices"
+                                for (i in 0 until jsonArray.length()) {
+                                    val obj = jsonArray.getJSONObject(i)
+                                    val device = DeviceInfo(
+                                        deviceId = obj.optInt("deviceId"),
+                                        name = obj.getString("name"),
+                                        ip = obj.getString("ip"),
+                                        isGroupOwner = obj.getBoolean("isGroupOwner"),
+                                        timestamp = obj.getLong("timestamp")
                                     )
-//                                    delay(1000)
-
+                                    parsedDevices.add(device)
                                 }
 
-                                lineStr.startsWith("{") && lineStr.endsWith("}") -> {
-                                    val obj = JSONObject(lineStr)
-//                                    delay(1000)
+                                parsedDevices.forEach { device ->
+                                    val exists =
+                                        isDuplicateDevice(device.name, device.ip, device.timestamp)
+                                    if (!exists) deviceInfoDao.insertDevice(device)
+                                }
 
-                                    // Handle HELLO type
-                                    when {
-                                        obj.optString("type") == "HELLO" -> {
-                                            val devicesArray = obj.getJSONArray("devices")
+                                Log.d("GM_RECEIVER", "Parsed DEVICE_LIST broadcast: $parsedDevices")
+                            }
 
-                                            for (i in 0 until devicesArray.length()) {
-                                                val device = devicesArray.getJSONObject(i)
-                                                val name = device.getString("name")
-                                                val ip = device.getString("ip")
-                                                val isGroupOwner = device.getBoolean("isGroupOwner")
-                                                val timestamp = device.getLong("timestamp")
+                            lineStr.startsWith("{") && lineStr.endsWith("}") -> {
+                                val obj = JSONObject(lineStr)
 
-                                                val duplicate = deviceInfoDao.isDuplicateDevice(name, ip, timestamp)
-                                                if (!duplicate) {
-                                                    val newDevice = DeviceInfo(name = name, ip = ip, isGroupOwner = isGroupOwner, timestamp = timestamp)
-                                                    deviceInfoDao.insertDevice(newDevice)
-                                                    Log.d("GO_RECEIVER", "Inserted device: $newDevice")
-                                                } else {
-                                                    Log.d("GO_RECEIVER", "Skipped duplicate device: $name - $ip")
+                                when {
+                                    obj.optString("type") == "KEY_EXCHANGE" -> {
+                                        try {
+                                            val rawIp = socket.inetAddress.hostAddress ?: "unknown"
+                                            val senderIp = if (rawIp == "::1") "127.0.0.1" else rawIp
+                                            val base64PublicKey = obj.getString("publicKey")
+
+                                            Log.d("KEY_EXCHANGE", "Received public key from $senderIp: $base64PublicKey")
+
+                                            // 1. Convert Base64 to PublicKey
+                                            val peerPublicKey = KeyStoreManager.base64ToPublicKey(base64PublicKey)
+
+                                            // 2. Derive AES key
+                                            val aesKey = KeyStoreManager.deriveSharedAESKey(peerPublicKey)
+
+                                            // 3. Store in memory
+                                            Constants.peerAESKeys[senderIp] = aesKey
+                                            Constants.peerPublicKeys[senderIp] = peerPublicKey
+
+                                            Log.d("KEY_EXCHANGE", "Shared AES key stored for $senderIp")
+
+                                            // 4. Save peer public key to Room (if not already exists)
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                try {
+                                                    val existing = peerPublicKeyDao.getKeyByIp(senderIp)
+                                                    if (existing == null) {
+                                                        peerPublicKeyDao.insertKey(
+                                                            PeerPublicKeyEntity(
+                                                                ip = senderIp,
+                                                                base64Key = base64PublicKey
+                                                            )
+                                                        )
+                                                        Log.d("E2EE", "Saved peer public key to Room for $senderIp")
+                                                    } else {
+                                                        Log.d("E2EE", "Peer public key already exists in Room for $senderIp")
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Log.e("E2EE", "Failed to save public key to Room: ${e.message}")
                                                 }
                                             }
-
-
-//                                            Toast.makeText(
-//                                                applicationContext,
-//                                                "Hello Message Received",
-//                                                Toast.LENGTH_SHORT
-//                                            ).show()
-
-//                                            val name = obj.getString("name")
-//                                            val ip = obj.getString("ip")
-//                                            val isGO = obj.getBoolean("isGroupOwner")
-//                                            val timestamp = obj.getLong("timestamp")
 //
-//                                            val device = DeviceInfo(
-//                                                name = name,
-//                                                ip = ip,
-//                                                isGroupOwner = isGO,
-//                                                timestamp = timestamp
-//                                            )
-//
-//                                            val exists = isDuplicateDevice(name, ip, timestamp)
-//                                            if (!exists) {
-//                                                deviceInfoDao.insertDevice(device)
-////                                                Toast.makeText(
-////                                                    applicationContext,
-////                                                    "GM info saved",
-////                                                    Toast.LENGTH_SHORT
-////                                                ).show()
-//                                            }
+                                            // 5. Send our own public key back
+                                            val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+                                            val response = JSONObject().apply {
+                                                put("type", "KEY_EXCHANGE")
+                                                put("publicKey", KeyStoreManager.getOwnPublicKeyBase64())
+                                            }
+                                            writer.write(response.toString() + "\n")
+                                            writer.flush()
 
-                                            Log.d("GM_RECEIVER", "Parsed HELLO message: $devicesArray[1]")
-//                                            delay(1000)
-
-                                            legacyClientCallback()
+                                            Log.d("KEY_EXCHANGE", "Sent GO public key to $senderIp")
+                                        } catch (e: Exception) {
+                                            Log.e("KEY_EXCHANGE", "Failed to handle key exchange: ${e.message}", e)
                                         }
-                                        // Handle fallback single device broadcast
-                                        obj.has("name") && obj.has("ip") && obj.has("timestamp") -> {
-                                            val name = obj.getString("name")
-                                            val ip = obj.getString("ip")
-                                            val isGO = obj.getBoolean("isGroupOwner")
-                                            val timestamp = obj.getLong("timestamp")
+                                    }
 
-                                            val device = DeviceInfo(
-                                                name = name,
-                                                ip = ip,
-                                                isGroupOwner = isGO,
-                                                timestamp = timestamp
+                                    obj.optString("type") == "HELLO" -> {
+                                        val devicesArray = obj.getJSONArray("devices")
+
+                                        for (i in 0 until devicesArray.length()) {
+                                            val device = devicesArray.getJSONObject(i)
+                                            val name = device.getString("name")
+                                            val ip = device.getString("ip")
+                                            val isGroupOwner = device.getBoolean("isGroupOwner")
+                                            val timestamp = device.getLong("timestamp")
+
+                                            val duplicate =
+                                                deviceInfoDao.isDuplicateDevice(name, ip, timestamp)
+                                            if (!duplicate) {
+                                                val newDevice = DeviceInfo(
+                                                    name = name,
+                                                    ip = ip,
+                                                    isGroupOwner = isGroupOwner,
+                                                    timestamp = timestamp
+                                                )
+                                                deviceInfoDao.insertDevice(newDevice)
+                                                Log.d("GO_RECEIVER", "Inserted device: $newDevice")
+                                            } else {
+                                                Log.d(
+                                                    "GO_RECEIVER",
+                                                    "Skipped duplicate: $name - $ip"
+                                                )
+                                            }
+                                        }
+
+                                        Log.d("GM_RECEIVER", "Parsed HELLO message")
+
+                                        // After processing HELLO, send GO public key
+                                        try {
+                                            val writer =
+                                                BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+                                            val response = JSONObject().apply {
+                                                put("type", "KEY_EXCHANGE")
+                                                put(
+                                                    "publicKey",
+                                                    KeyStoreManager.getOwnPublicKeyBase64()
+                                                )
+                                            }
+                                            writer.write(response.toString() + "\n")
+                                            writer.flush()
+                                            Log.d(
+                                                "KEY_EXCHANGE",
+                                                "Auto-sent GO public key to GM after HELLO"
                                             )
+                                        } catch (e: Exception) {
+                                            Log.e(
+                                                "KEY_EXCHANGE",
+                                                "Failed to send public key after HELLO: ${e.message}"
+                                            )
+                                        }
 
-                                            val exists = isDuplicateDevice(name, ip, timestamp)
-                                            if (!exists) {
-                                                deviceInfoDao.insertDevice(device)
+                                        legacyClientCallback()
+                                    }
+
+                                    obj.has("name") && obj.has("ip") && obj.has("timestamp") -> {
+                                        val name = obj.getString("name")
+                                        val ip = obj.getString("ip")
+                                        val isGO = obj.getBoolean("isGroupOwner")
+                                        val timestamp = obj.getLong("timestamp")
+
+                                        val device = DeviceInfo(
+                                            name = name,
+                                            ip = ip,
+                                            isGroupOwner = isGO,
+                                            timestamp = timestamp
+                                        )
+                                        val exists = isDuplicateDevice(name, ip, timestamp)
+                                        if (!exists) deviceInfoDao.insertDevice(device)
+
+                                        Log.d(
+                                            "GM_RECEIVER",
+                                            "Parsed fallback device broadcast: $device"
+                                        )
+                                    }
+
+                                    (obj.has("ciphertext") && obj.has("iv")) -> {
+                                        val senderIp = socket.inetAddress.hostAddress ?: return@launch
+
+                                        var aesKey = peerAESKeys[senderIp]
+
+                                        if (aesKey == null) {
+                                            Log.w("DECRYPT", "AES key not in memory for $senderIp. Trying Room DB...")
+
+                                            // Try loading from Room DB
+                                            val entity = peerPublicKeyDao.getKeyByIp(senderIp)
+                                            if (entity != null) {
+                                                val peerPublicKey = KeyStoreManager.base64ToPublicKey(entity.base64Key)
+                                                aesKey = KeyStoreManager.deriveSharedAESKey(peerPublicKey)
+
+                                                // Cache it
+                                                peerAESKeys[senderIp] = aesKey
+                                                Constants.peerPublicKeys[senderIp] = peerPublicKey
+
+                                                Log.d("DECRYPT", "Derived AES key from DB for $senderIp")
+                                            } else {
+                                                Log.e("DECRYPT", "No public key found in DB for $senderIp")
+                                            }
+                                        }
+
+                                        if (aesKey != null) {
+                                            try {
+                                                val ciphertext = Base64.decode(obj.getString("ciphertext"), Base64.NO_WRAP)
+                                                val iv = Base64.decode(obj.getString("iv"), Base64.NO_WRAP)
+
+                                                val decrypted = AESGCMHelper.decrypt(aesKey, ciphertext, iv)
+
+                                                Log.d("CHAT", "Decrypted message from $senderIp: $decrypted")
+
+                                                Handler(Looper.getMainLooper()).post {
+                                                    Constants.chatCallback(decrypted)
+                                                }
+
+                                            } catch (e: Exception) {
+                                                Log.e("DECRYPT", "Decryption failed from $senderIp: ${e.message}", e)
+                                            }
+                                        } else {
+                                            Log.w("DECRYPT", "Still no AES key available for $senderIp")
+                                        }
+                                    }
+
+                                }
+                            }
+
+                            else -> {
+                                val obj = JSONObject(lineStr)
+
+                                // Handle encrypted chat message
+                                if (obj.has("ciphertext") && obj.has("iv")) {
+                                    val senderIp = socket.inetAddress.hostAddress ?: return@launch
+
+                                    var aesKey = peerAESKeys[senderIp]
+
+                                    if (aesKey == null) {
+                                        Log.w("DECRYPT", "AES key not in memory for $senderIp. Trying Room DB...")
+
+                                        // Try loading from Room DB
+                                        val entity = peerPublicKeyDao.getKeyByIp(senderIp)
+                                        if (entity != null) {
+                                            val peerPublicKey = KeyStoreManager.base64ToPublicKey(entity.base64Key)
+                                            aesKey = KeyStoreManager.deriveSharedAESKey(peerPublicKey)
+
+                                            // Cache it
+                                            peerAESKeys[senderIp] = aesKey
+                                            Constants.peerPublicKeys[senderIp] = peerPublicKey
+
+                                            Log.d("DECRYPT", "Derived AES key from DB for $senderIp")
+                                        } else {
+                                            Log.e("DECRYPT", "No public key found in DB for $senderIp")
+                                        }
+                                    }
+
+                                    if (aesKey != null) {
+                                        try {
+                                            val ciphertext = Base64.decode(obj.getString("ciphertext"), Base64.NO_WRAP)
+                                            val iv = Base64.decode(obj.getString("iv"), Base64.NO_WRAP)
+
+                                            val decrypted = AESGCMHelper.decrypt(aesKey, ciphertext, iv)
+
+                                            Log.d("CHAT", "Decrypted message from $senderIp: $decrypted")
+
+                                            Handler(Looper.getMainLooper()).post {
+                                                Constants.chatCallback(decrypted)
                                             }
 
-                                            Log.d(
-                                                "GM_RECEIVER",
-                                                "Parsed fallback device broadcast: $device"
-                                            )
-//                                            delay(1000)
-
+                                        } catch (e: Exception) {
+                                            Log.e("DECRYPT", "Decryption failed from $senderIp: ${e.message}", e)
                                         }
-
-                                    }
-                                }
-                                else -> {
-                                    if (lineStr.isNotEmpty() /*&& isChatMessage*/) {
-                                        Log.d("CHAT", "Received chat message: $lineStr")
-
-                                        Handler(Looper.getMainLooper()).post {
-                                            // You can either use onMessageReceived or Constants.chatCallback
-//                                            onMessageReceived(chatMessage)
-                                            Constants.chatCallback(lineStr)
-                                        }
+                                    } else {
+                                        Log.w("DECRYPT", "Still no AES key available for $senderIp")
                                     }
                                 }
                             }
-//                        } catch (e: Exception) {
-//                            Log.e("GM_RECEIVER", "Failed to parse broadcast", e)
-//                        }
-//                        delay(1000)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MSG_PARSE", "Error parsing message: ${e.message}")
+                    }
 
-//                        Handler().postDelayed({
-//                        Handler(Looper.getMainLooper()).post {
-//                            Log.d("GO_RECEIVER", "Calling legacyClientCallback after HELLO")
-//                        }
-//                        broadcastLegacyDeviceList(
-//                            context = applicationContext
-//                        )
-//                        }, 5000)
-//                    }
-//                    else {
-//                        // Check for DEVICE_LIST broadcast here
-////                        if (line.toString().startsWith("DEVICE_LIST:")) {
-////
-////                        delay(1000)
-//
-//                        try {
-//                            val lineStr = line.toString()
-//
-//                            when {
-//                                lineStr.startsWith("DEVICE_LIST:") -> {
-////                                    delay(1000)
-//
-//                                    // Handle full device list
-//                                    val jsonArrayString = lineStr.removePrefix("DEVICE_LIST:")
-//                                    val jsonArray = JSONArray(jsonArrayString)
-//                                    val parsedDevices = mutableListOf<DeviceInfo>()
-//
-//                                    for (i in 0 until jsonArray.length()) {
-//                                        val obj = jsonArray.getJSONObject(i)
-//                                        val device = DeviceInfo(
-//                                            deviceId = obj.optInt("deviceId"),
-//                                            name = obj.getString("name"),
-//                                            ip = obj.getString("ip"),
-//                                            isGroupOwner = /*false*/obj.getBoolean("isGroupOwner"), // Always false for GM
-//                                            timestamp = obj.getLong("timestamp")
-//                                        )
-//                                        parsedDevices.add(device)
-//                                    }
-////                                    delay(1000)
-//
-//
-//                                    parsedDevices.forEach { device ->
-//                                        val exists =
-//                                            isDuplicateDevice(
-//                                                device.name,
-//                                                device.ip,
-//                                                device.timestamp
-//                                            )
-//                                        if (!exists) {
-//                                            deviceInfoDao.insertDevice(device)
-////                                            delay(1000)
-//
-//                                        }
-//                                    }
-//
-//                                    Log.d(
-//                                        "GM_RECEIVER",
-//                                        "Parsed DEVICE_LIST broadcast: $parsedDevices"
-//                                    )
-//                                }
-//
-//                                lineStr.startsWith("{") && lineStr.endsWith("}") -> {
-//                                    val obj = JSONObject(lineStr)
-////                                    delay(1000)
-//
-//                                    // Handle HELLO type
-//                                    when {
-//                                        obj.optString("type") == "HELLO" -> {
-//                                            val name = obj.getString("name")
-//                                            val ip = obj.getString("ip")
-//                                            val isGO = obj.getBoolean("isGroupOwner")
-//                                            val timestamp = obj.getLong("timestamp")
-//
-//                                            val device = DeviceInfo(
-//                                                name = name,
-//                                                ip = ip,
-//                                                isGroupOwner = isGO,
-//                                                timestamp = timestamp
-//                                            )
-////                                            delay(1000)
-//
-//                                            val exists = isDuplicateDevice(name, ip, timestamp)
-//                                            if (!exists) {
-//                                                deviceInfoDao.insertDevice(device)
-////                                                delay(1000)
-//
-//                                            }
-//
-//                                            Log.d("GM_RECEIVER", "Parsed HELLO message: $device")
-//                                        }
-//                                        // Handle fallback single device broadcast
-//                                        obj.has("name") && obj.has("ip") && obj.has("timestamp") -> {
-////                                            delay(1000)
-//
-//                                            val name = obj.getString("name")
-//                                            val ip = obj.getString("ip")
-//                                            val isGO = obj.getBoolean("isGroupOwner")
-//                                            val timestamp = obj.getLong("timestamp")
-//
-//                                            val device = DeviceInfo(
-//                                                name = name,
-//                                                ip = ip,
-//                                                isGroupOwner = isGO,
-//                                                timestamp = timestamp
-//                                            )
-////                                            delay(1000)
-//
-//                                            val exists = isDuplicateDevice(name, ip, timestamp)
-//                                            if (!exists) {
-//                                                deviceInfoDao.insertDevice(device)
-////                                                delay(1000)
-//
-//                                            }
-//
-//                                            Log.d(
-//                                                "GM_RECEIVER",
-//                                                "Parsed fallback device broadcast: $device"
-//                                            )
-//                                        }
-//                                    }
-//                                }
-//
-//                                else -> {
-//                                    if (lineStr.isNotEmpty()) {
-//                                        Log.d("CHAT", "Received chat message: $lineStr")
-////                                        delay(1000)
-//
-//                                        Handler(Looper.getMainLooper()).post {
-//                                            // You can either use onMessageReceived or Constants.chatCallback
-////                                            onMessageReceived(chatMessage)
-//                                            Constants.chatCallback(lineStr)
-//                                        }
-//                                    }
-//                                }
-//                            }
-//                        } catch (e: Exception) {
-//                            Log.e("GM_RECEIVER", "Failed to parse broadcast", e)
-//                        }
-//                    }
-                    onMessageReceived(line!!)
+                    onMessageReceived(lineStr!!)
                 }
 
                 socket.close()
@@ -653,68 +552,68 @@ class MessageRouterService : Service() {
         }
     }
 
-    private fun broadcastLegacyDeviceList(context: Context) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-//                added deferred value here, first test this and keep tracking from here
-//                logs are not coming in Dispathers.IO
+//    private fun broadcastLegacyDeviceList(context: Context) {
+//        CoroutineScope(Dispatchers.IO).launch {
+//            try {
+////                added deferred value here, first test this and keep tracking from here
+////                logs are not coming in Dispathers.IO
+//
+//                val deferredValue = async(Dispatchers.IO) { getOwnIp(applicationContext) }
+//                val ownIp = deferredValue.await()
+////                    delay(5000)
+//
+//                if (ownIp.isNullOrBlank() || ownIp == "0.0.0.0") {
+////                    Toast.makeText(
+////                        applicationContext,
+////                        "Failed to get valid IP",
+////                        Toast.LENGTH_SHORT
+////                    ).show()
+//
+//                    Handler(Looper.getMainLooper()).post {
+//                        Log.d("LEGACY_GO", "Failed to get vvalid IP")
+//                    }
+//                    return@launch
+//                }
+////                val ownIp = getOwnIp(context, true) ?: return@launch
+//                val ownName = "GO_Device"
+//                val timestamp = System.currentTimeMillis()
+//
+//                val duplicate = deviceInfoDao.isDuplicateDevice(ownName, ownIp, timestamp)
+//                if (!duplicate) {
+//                    val goDevice = DeviceInfo(
+//                        name = ownName,
+//                        ip = ownIp,
+//                        isGroupOwner = true,
+//                        timestamp = timestamp
+//                    )
+//                    deviceInfoDao.insertDevice(goDevice)
+//                    Handler(Looper.getMainLooper()).post {
+//                        Log.d("LEGACY_GO", "Saved own device info: $goDevice")
+//                    }
+//                }
+//
+//                delay(300) // Give DB time to commit
+//
+//                val deviceList = deviceInfoDao.getAllDevices().first()
+//                val json = buildJsonForDeviceList(deviceList)
+//
+//                broadcastMessageToAllGMs(json)
+//
+//                Handler(Looper.getMainLooper()).post {
+//                    Log.d("LEGACY_GO", "Broadcasted device list to GMs: $json")
+//                }
+//            } catch (e: Exception) {
+//                Handler(Looper.getMainLooper()).post {
+//                    Log.e("LEGACY_GO", "Error broadcasting legacy device list: ${e.message}")
+//                }
+//            }
+//        }
+//    }
 
-                val deferredValue = async(Dispatchers.IO) { getOwnIp(applicationContext) }
-                val ownIp = deferredValue.await()
-//                    delay(5000)
 
-                if (ownIp.isNullOrBlank() || ownIp == "0.0.0.0") {
-//                    Toast.makeText(
-//                        applicationContext,
-//                        "Failed to get valid IP",
-//                        Toast.LENGTH_SHORT
-//                    ).show()
-
-                    Handler(Looper.getMainLooper()).post {
-                    Log.d("LEGACY_GO", "Failed to get vvalid IP")
-                    }
-                    return@launch
-                }
-//                val ownIp = getOwnIp(context, true) ?: return@launch
-                val ownName = "GO_Device"
-                val timestamp = System.currentTimeMillis()
-
-                val duplicate = deviceInfoDao.isDuplicateDevice(ownName, ownIp, timestamp)
-                if (!duplicate) {
-                    val goDevice = DeviceInfo(
-                        name = ownName,
-                        ip = ownIp,
-                        isGroupOwner = true,
-                        timestamp = timestamp
-                    )
-                    deviceInfoDao.insertDevice(goDevice)
-                    Handler(Looper.getMainLooper()).post {
-                        Log.d("LEGACY_GO", "Saved own device info: $goDevice")
-                    }
-                }
-
-                delay(300) // Give DB time to commit
-
-                val deviceList = deviceInfoDao.getAllDevices().first()
-                val json = buildJsonForDeviceList(deviceList)
-
-                broadcastMessageToAllGMs(json)
-
-                Handler(Looper.getMainLooper()).post {
-                    Log.d("LEGACY_GO", "Broadcasted device list to GMs: $json")
-                }
-            } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post {
-                    Log.e("LEGACY_GO", "Error broadcasting legacy device list: ${e.message}")
-                }
-            }
-        }
-    }
-
-
-    private fun insertNew(device: DeviceInfo) {
-
-    }
+//    private fun insertNew(device: DeviceInfo) {
+//
+//    }
 
     private suspend fun isDuplicateDevice(name: String, ip: String, timestamp: Long): Boolean {
         val byName = deviceInfoDao.findByName(name)
@@ -727,14 +626,14 @@ class MessageRouterService : Service() {
         }
     }
 
-    fun stopSilentReceiver() {
-        try {
-            serverSocket?.close()
-            Log.d("TCP", "Silent receiver socket closed")
-        } catch (e: IOException) {
-            Log.e("TCP", "Error closing silent socket: ${e.message}")
-        }
-    }
+//    fun stopSilentReceiver() {
+//        try {
+//            serverSocket?.close()
+//            Log.d("TCP", "Silent receiver socket closed")
+//        } catch (e: IOException) {
+//            Log.e("TCP", "Error closing silent socket: ${e.message}")
+//        }
+//    }
 
     fun broadcastMessageToAllGMs(dataToSend: String) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -745,8 +644,6 @@ class MessageRouterService : Service() {
                     try {
                         val socket = Socket()
                         socket.connect(InetSocketAddress(device.ip, PORT), 5000)
-
-//                        Log.d("GO_BROADCAST", "Sending to ${device.inetAddress.hostAddress}")
                         val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
                         writer.write(dataToSend)
                         writer.newLine()
@@ -766,71 +663,65 @@ class MessageRouterService : Service() {
         }
     }
 
-    private fun startUdpReceiverOnGO() {
-        Thread {
-            try {
-                val socket = DatagramSocket(9876)
-                val buffer = ByteArray(1024)
-                val packet = DatagramPacket(buffer, buffer.size)
+//    private fun startUdpReceiverOnGO() {
+//        Thread {
+//            try {
+//                val socket = DatagramSocket(9876)
+//                val buffer = ByteArray(1024)
+//                val packet = DatagramPacket(buffer, buffer.size)
+//
+//                while (true) {
+//                    socket.receive(packet)
+//
+//                    val receivedMessage = String(packet.data, 0, packet.length)
+//                    val senderIp = packet.address.hostAddress
+//
+//                    Log.d("UDP_RECEIVER", "Received from $senderIp: $receivedMessage")
+//
+//                    Handler(Looper.getMainLooper()).post {
+//                        Toast.makeText(
+//                            this,
+//                            /*"From $senderIp: $receivedMessage"*/ receivedMessage,
+//                            Toast.LENGTH_LONG
+//                        ).show()
+//                    }
+//                }
+//            } catch (e: Exception) {
+//                e.printStackTrace()
+//            }
+//        }.start()
+//    }
 
-                while (true) {
-                    socket.receive(packet)
-
-                    val receivedMessage = String(packet.data, 0, packet.length)
-                    val senderIp = packet.address.hostAddress
-
-                    Log.d("UDP_RECEIVER", "Received from $senderIp: $receivedMessage")
-
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(
-                            this,
-                            /*"From $senderIp: $receivedMessage"*/ receivedMessage,
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-    }
-
-    fun startListeningForGMHello(context: Context) {
-        Thread {
-            try {
-                val socket = DatagramSocket(9876)
-                val buffer = ByteArray(1024)
-                while (true) {
-                    val packet = DatagramPacket(buffer, buffer.size)
-                    socket.receive(packet)
-                    val message = String(packet.data, 0, packet.length)
-                    if (message.trim() == "HELLO Thanks for connecting through Legacy Wifi") {
-//                        runOnUiThread {
-//                            Toast.makeText(context, "GM connected!", Toast.LENGTH_SHORT).show()
-//                            context.startActivity(Intent(context, ChatActivity::class.java))
-//                        }
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-    }
+//    fun startListeningForGMHello(context: Context) {
+//        Thread {
+//            try {
+//                val socket = DatagramSocket(9876)
+//                val buffer = ByteArray(1024)
+//                while (true) {
+//                    val packet = DatagramPacket(buffer, buffer.size)
+//                    socket.receive(packet)
+//                    val message = String(packet.data, 0, packet.length)
+//                    if (message.trim() == "HELLO Thanks for connecting through Legacy Wifi") {
+////                        runOnUiThread {
+////                            Toast.makeText(context, "GM connected!", Toast.LENGTH_SHORT).show()
+////                            context.startActivity(Intent(context, ChatActivity::class.java))
+////                        }
+//                        break
+//                    }
+//                }
+//            } catch (e: Exception) {
+//                e.printStackTrace()
+//            }
+//        }.start()
+//    }
 
     fun sendMessageToServer(hostAddress: String, message: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val socket = Socket()
-//                delay(1000)
-
                 socket.connect(InetSocketAddress(hostAddress, PORT), 10000)
                 ipLcGo = hostAddress
-//                delay(1000)
-
                 socket.getOutputStream().bufferedWriter().use {
-//                    delay(1000)
-
                     it.write(message)
                     it.newLine()
                     it.flush()
@@ -842,62 +733,78 @@ class MessageRouterService : Service() {
         }
     }
 
-    fun sendMessageToClient(message: String, gm_ip: String) {
+    fun connectToPeerAndSendMessage(goIp: String, message: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                gm_ip.let { clientIp ->
-                    val socket = Socket()
-                    socket.connect(InetSocketAddress(clientIp, PORT), 5000)
+                val socket = Socket(goIp, PORT)
+                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
-                    val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-                    writer.write(message)
-                    writer.newLine()
+                val existingKey = peerAESKeys[goIp]
+                if (existingKey == null) {
+                    // Send our public key as KEY_EXCHANGE
+                    val request = JSONObject().apply {
+                        put("type", "KEY_EXCHANGE")
+                        put("publicKey", KeyStoreManager.getOwnPublicKeyBase64())
+                    }
+                    writer.write(request.toString() + "\n")
                     writer.flush()
-                    socket.close()
+                    Log.d("E2EE", "Sent our public key to $goIp")
+
+                    // Read GO's public key response
+                    val reply = reader.readLine() ?: return@launch
+                    val replyObj = JSONObject(reply)
+
+                    if (replyObj.optString("type") == "KEY_EXCHANGE") {
+                        val base64GoPubKey = replyObj.getString("publicKey")
+                        val goPubKey = KeyStoreManager.base64ToPublicKey(base64GoPubKey)
+
+                        val aesKey = KeyStoreManager.deriveSharedAESKey(goPubKey)
+                        peerAESKeys[goIp] = aesKey
+                        KeyStoreManager.addPeerPublicKey(goIp, goPubKey)
+
+                        // SAVE to Room
+                        try {
+                            val existing = peerPublicKeyDao.getKeyByIp(goIp)
+                            if (existing == null) {
+                                peerPublicKeyDao.insertKey(
+                                    PeerPublicKeyEntity(
+                                        ip = goIp,
+                                        base64Key = Base64.encodeToString(
+                                            goPubKey.encoded,
+                                            Base64.NO_WRAP
+                                        )
+                                    )
+                                )
+                            } else {
+                                Log.d("E2EE", "Saved peer public key to Room for $goIp")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("E2EE", "Failed to save public key to Room: ${e.message}")
+                        }
+                        Log.d("KEY_EXCHANGE", "Stored GO public key and AES key for $goIp")
+                    }
                 }
-            } catch (e: IOException) {
-                Log.e("TCP", "Send to GM failed: ${e.message}")
+
+                // Encrypt the actual message
+                val aesKey = peerAESKeys[goIp]
+                if (aesKey != null) {
+                    val (ciphertext, iv) = AESGCMHelper.encrypt(aesKey, message)
+                    val wrappedJson = JSONObject().apply {
+                        put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+                        put("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+                    }
+                    writer.write(wrappedJson.toString() + "\n")
+                    writer.flush()
+                    Log.d("E2EE", "Encrypted message sent to $goIp")
+                }
+
+                socket.close()
+            } catch (e: Exception) {
+                Log.e("E2EE", "Failed to connect/send to $goIp: ${e.message}")
             }
         }
     }
-
-//    fun connectToPeerAndSendMessage(ip: String, message: String) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            try {
-//                val socket = Socket()
-//                socket.connect(InetSocketAddress(ip, PORT), 5000)
-//
-//                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-//                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-//
-//                // Step 1: Send our public key
-//                val myPubKey = KeyStoreManager.getPublicKey().toBase64()
-//                writer.write("ECDH_PUBLIC:$myPubKey\n")
-//                writer.flush()
-//
-//                // Step 2: Receive their public key
-//                val response = reader.readLine()
-//                if (response.startsWith("ECDH_PUBLIC:")) {
-//                    val peerKey = base64ToPublicKey(response.removePrefix("ECDH_PUBLIC:"))
-//                    val aesKey = deriveSharedAESKey(peerKey)
-//                    peerAESKeys[ip] = aesKey
-//                    Log.d("TCP", "AES key stored for $ip")
-//                }
-//
-//                // Step 3: Encrypt and send
-//                val aesKey = peerAESKeys[ip]
-//                if (aesKey != null) {
-//                    val encrypted = AESGCMHelper.encrypt(message, aesKey)
-//                    writer.write("$encrypted\n")
-//                    writer.flush()
-//                }
-//
-//                socket.close()
-//            } catch (e: Exception) {
-//                Log.e("TCP", "Connection/send failed to $ip: ${e.message}")
-//            }
-//        }
-//    }
 
 }
 

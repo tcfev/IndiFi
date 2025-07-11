@@ -1,8 +1,10 @@
 package org.fordem.indifi.ui.utils
 
 import android.net.wifi.p2p.WifiP2pDevice
-import org.fordem.indifi.ui.db.DeviceInfo
+import org.fordem.indifi.ui.model.DeviceInfo
 import org.fordem.indifi.ui.model.PeerDevice
+import java.security.PublicKey
+import javax.crypto.SecretKey
 
 object Constants {
 
@@ -20,6 +22,9 @@ object Constants {
     lateinit var peerPositionCallback: ((PeerDevice, Int) -> Unit)
     lateinit var openChatCallback: ((DeviceInfo) -> Unit)
     lateinit var chatCallback: ((String) -> Unit)
+
+    val peerPublicKeys: MutableMap<String, PublicKey> = mutableMapOf()
+    val peerAESKeys = mutableMapOf<String, SecretKey>()
 
     const val PORT = 8888
     const val SILENTPORT = 8889

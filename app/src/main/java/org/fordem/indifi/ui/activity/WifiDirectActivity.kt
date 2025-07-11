@@ -142,70 +142,8 @@ class WifiDirectActivity : AppCompatActivity() {
                         val networkInfo = intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
 
                         if (networkInfo != null && networkInfo.isConnected) {
-//                            wifiP2pManager.requestConnectionInfo(channel) { info ->
-//                                if (info.groupFormed) {
-//                                    if (info.isGroupOwner) {
-//                                        Toast.makeText(
-//                                            this@WifiDirectActivity,
-//                                            "Connected as Group Owner",
-//                                            Toast.LENGTH_SHORT
-//                                        ).show()
-//                                    } else {
-//                                        Toast.makeText(
-//                                            this@WifiDirectActivity,
-//                                            "Connected as Group Member",
-//                                            Toast.LENGTH_SHORT
-//                                        ).show()
-//                                    }
-//                                }
-//                            }
-
-
-//                            wifiP2pManager.requestConnectionInfo(channel) { info ->
-//                                if (info.groupFormed && info.isGroupOwner) {
-//                                    Toast.makeText(
-//                                        this@WifiDirectActivity,
-//                                        "Connected as Group Owner",
-//                                        Toast.LENGTH_SHORT
-//                                    ).show()
-//                                    TcpHelper.startServer { message ->
-//                                        runOnUiThread {
-//                                            Toast.makeText(
-//                                                this@WifiDirectActivity,
-//                                                "Received: $message",
-//                                                Toast.LENGTH_LONG
-//                                            ).show()
-//                                        }
-//                                    }
-//                                } else if (info.groupFormed) {
-//                                    Toast.makeText(
-//                                        this@WifiDirectActivity,
-//                                        "Connected as Group Member",
-//                                        Toast.LENGTH_SHORT
-//                                    ).show()
-//                                    TcpHelper.sendMessageToServer(
-//                                        info.groupOwnerAddress.hostAddress ?: "", "Hello from GM!"
-//                                    )
-//                                }
-//                            }
-
-
-//                            wifiP2pManager.requestConnectionInfo(channel) { info ->
-//                                if (info.groupFormed) {
-//                                    val chatIntent = Intent(this@WifiDirectActivity, ChatActivity::class.java).apply {
-//                                        putExtra("isGroupOwner", info.isGroupOwner)
-//                                        putExtra("groupOwnerAddress", info.groupOwnerAddress?.hostAddress)
-//                                    }
-//                                    startActivity(chatIntent)
-//                                } else {
-//                                    Toast.makeText(this@WifiDirectActivity, "Not part of group", Toast.LENGTH_SHORT).show()
-//                                }
-//                            }
-
-
                             wifiP2pManager.requestConnectionInfo(channel) { info ->
                                 if (info.groupFormed && info.groupOwnerAddress != null) {
-//                                    launchChatActivity(info)
                                 } else {
                                     Handler(Looper.getMainLooper()).postDelayed({
                                         wifiP2pManager.requestConnectionInfo(channel) { retryInfo ->

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.fordem.indifi.ui.model.DeviceInfo
 import javax.inject.Inject
 
 @HiltViewModel
@@ -16,9 +17,6 @@ class DeviceInfoViewModel @Inject constructor(
     val ownDeviceInfo: Flow<OwnDeviceInfo?> = dao.getOwnInfo()
 
     val allDevices: Flow<List<DeviceInfo>> = dao.getAllDevices().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-//    val allMessages = dao.getAllMessages()
-//        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
 
     suspend fun getOwnInfoDirect(): OwnDeviceInfo? {
         return dao.getOwnInfoDirect()

@@ -8,7 +8,7 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import org.fordem.indifi.ui.model.Message
 
-class MessageAdapter(context: Context, private val messages: List<Message>) :
+class MessageAdapter(context: Context, messages: List<Message>) :
     ArrayAdapter<Message>(context, 0, messages) {
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {

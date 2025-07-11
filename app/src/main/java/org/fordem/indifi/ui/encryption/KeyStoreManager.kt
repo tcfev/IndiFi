@@ -4,6 +4,9 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
+import org.fordem.indifi.ui.db.PeerPublicKeyDao
+import org.fordem.indifi.ui.model.PeerPublicKeyEntity
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -20,61 +23,32 @@ import javax.crypto.spec.SecretKeySpec
 object KeyStoreManager {
     private const val KEY_ALIAS = "ECDH_KEY"
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+    private var cachedKeyPair: KeyPair? = null
+
 
     fun getOrCreateKeyPair(): KeyPair {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (cachedKeyPair != null) return cachedKeyPair!!
 
-        if (keyStore.containsAlias("ECDH_KEY")) {
-            val entry = keyStore.getEntry("ECDH_KEY", null)
-            if (entry is KeyStore.PrivateKeyEntry) {
-                val publicKey = entry.certificate.publicKey
-                val privateKey = entry.privateKey
-                return KeyPair(publicKey, privateKey)
-            } else {
-                throw IllegalStateException("Entry for alias ECDH_KEY is not a PrivateKeyEntry")
-            }
-        }
+        val keyPairGenerator = KeyPairGenerator.getInstance("EC")
+        keyPairGenerator.initialize(ECGenParameterSpec("secp256r1"))
+        val keyPair = keyPairGenerator.generateKeyPair()
 
-        val keyPairGenerator = KeyPairGenerator.getInstance("EC", "AndroidKeyStore")
-        val parameterSpec = KeyGenParameterSpec.Builder(
-            "ECDH_KEY",
-            KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY // Use sign/verify for EC keys
-        )
-            .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-            .setDigests(KeyProperties.DIGEST_SHA256)
-            .setUserAuthenticationRequired(false)
-            .build()
-
-        keyPairGenerator.initialize(parameterSpec)
-        return keyPairGenerator.generateKeyPair()
+        cachedKeyPair = keyPair // store in memory if needed
+        return keyPair
     }
 
-    fun getOrCreateSharedAESKey(context: Context, peerIp: String, peerPublicKey: PublicKey): SecretKey {
-        val ownKeyPair = getOrCreateKeyPair()
-        val keyAgreement = KeyAgreement.getInstance("ECDH").apply {
-            init(ownKeyPair.private)
-            doPhase(peerPublicKey, true)
-        }
-
-        val sharedSecret = keyAgreement.generateSecret()
-        val derivedKeyBytes = MessageDigest.getInstance("SHA-256").digest(sharedSecret)
-
-        return SecretKeySpec(derivedKeyBytes, "AES")
-    }
-
-    fun getPublicKey(): PublicKey {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-
-        if (!keyStore.containsAlias(KEY_ALIAS)) {
-            getOrCreateKeyPair() // Automatically generate key pair
-        }
-
-        val entry = keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
-            ?: throw IllegalStateException("Entry for alias $KEY_ALIAS is not a PrivateKeyEntry")
-
-        return entry.certificate.publicKey
-    }
-
+//    fun getOrCreateSharedAESKey(context: Context, peerIp: String, peerPublicKey: PublicKey): SecretKey {
+//        val ownKeyPair = getOrCreateKeyPair()
+//        val keyAgreement = KeyAgreement.getInstance("ECDH").apply {
+//            init(ownKeyPair.private)
+//            doPhase(peerPublicKey, true)
+//        }
+//
+//        val sharedSecret = keyAgreement.generateSecret()
+//        val derivedKeyBytes = MessageDigest.getInstance("SHA-256").digest(sharedSecret)
+//
+//        return SecretKeySpec(derivedKeyBytes, "AES")
+//    }
 
     // Store and retrieve peer public keys (from server, QR, or exchange message)
     private val peerPublicKeyMap = mutableMapOf<String, PublicKey>()
@@ -83,7 +57,11 @@ object KeyStoreManager {
         peerPublicKeyMap[ip] = publicKey
     }
 
-    fun getPeerPublicKey(ip: String): PublicKey? = peerPublicKeyMap[ip]
+    fun getPeerPublicKey(ip: String): PublicKey? {
+        Log.d("E2EE", "getPeerPublicKey() called for: $ip")
+        Log.d("E2EE", "Available keys: ${peerPublicKeyMap.keys}")
+        return peerPublicKeyMap[ip]
+    }
 
     // Helper to convert PublicKey to Base64 string
     fun PublicKey.toBase64(): String {
@@ -109,10 +87,34 @@ object KeyStoreManager {
         return SecretKeySpec(keyBytes, "AES")
     }
 
-
-    fun getPrivateKey(): PrivateKey {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        val entry = keyStore.getEntry(KEY_ALIAS, null) as KeyStore.PrivateKeyEntry
-        return entry.privateKey
+    fun debugPrintStoredKeys() {
+        Log.d("E2EE", "Stored peer keys:")
+        peerPublicKeyMap.forEach { (ip, key) ->
+            Log.d("E2EE", "IP: $ip → Key: $key")
+        }
     }
+
+    fun getOwnPublicKeyBase64(): String {
+        val keyPair = getOrCreateKeyPair()
+        val publicKey = keyPair.public
+        val encoded = publicKey.encoded
+        return Base64.encodeToString(encoded, Base64.NO_WRAP)
+    }
+
+//    suspend fun savePeerPublicKeyToRoom(ip: String, key: PublicKey, dao: PeerPublicKeyDao) {
+//        val base64 = Base64.encodeToString(key.encoded, Base64.NO_WRAP)
+//        dao.insertKey(PeerPublicKeyEntity(ip, base64))
+//    }
+
+//    suspend fun loadPeerPublicKeyFromRoom(ip: String, dao: PeerPublicKeyDao): PublicKey? {
+//        val entity = dao.getKeyByIp(ip) ?: return null
+//        return try {
+//            val decoded = Base64.decode(entity.base64Key, Base64.NO_WRAP)
+//            val spec = X509EncodedKeySpec(decoded)
+//            KeyFactory.getInstance("EC").generatePublic(spec)
+//        } catch (e: Exception) {
+//            null
+//        }
+//    }
+
 }

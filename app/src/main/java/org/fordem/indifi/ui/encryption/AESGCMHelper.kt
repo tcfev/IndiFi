@@ -3,12 +3,19 @@ package org.fordem.indifi.ui.encryption
 import android.util.Base64
 import java.security.SecureRandom
 import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 object AESGCMHelper {
     private const val AES_MODE = "AES/GCM/NoPadding"
     private const val IV_LENGTH = 12
+
+//    fun generateKey(): SecretKey {
+//        val keyGen = KeyGenerator.getInstance("AES")
+//        keyGen.init(256)
+//        return keyGen.generateKey()
+//    }
 
     fun encrypt(secretKey: SecretKey, plainText: String): Pair<ByteArray, ByteArray> {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -19,9 +26,13 @@ object AESGCMHelper {
         return Pair(encrypted, iv)
     }
 
-    fun decrypt(secretKey: SecretKey, iv: ByteArray, ciphertext: ByteArray): String {
+    fun decrypt(secretKey: SecretKey, ciphertext: ByteArray, iv: ByteArray): String {
+        if (iv.size != 12) throw IllegalArgumentException("IV must be 12 bytes")
+
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        val spec = GCMParameterSpec(128, iv)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+
         val decryptedBytes = cipher.doFinal(ciphertext)
         return String(decryptedBytes, Charsets.UTF_8)
     }

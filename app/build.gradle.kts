@@ -79,4 +79,11 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     kapt(libs.androidx.room.compiler)
     implementation(libs.androidx.room.ktx)
+
+//    implementation(libs.mcipher)
+
+//    implementation(libs.simpleencryptionlib)
+
+//    implementation (libs.secureboxhelper)
+
 }

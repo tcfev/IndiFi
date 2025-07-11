@@ -1,4 +1,4 @@
-package org.fordem.indifi.ui.db
+package org.fordem.indifi.ui.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

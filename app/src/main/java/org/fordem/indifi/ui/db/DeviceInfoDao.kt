@@ -3,7 +3,7 @@ package org.fordem.indifi.ui.db
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
-import org.fordem.indifi.ui.model.ChatMessage
+import org.fordem.indifi.ui.model.DeviceInfo
 
 @Dao
 interface DeviceInfoDao {

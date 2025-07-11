@@ -25,6 +25,12 @@
         android:theme="@style/Theme.Indifi"
         tools:targetApi="31">
         <activity
+            android:name=".ui.activity.TestActivity2"
+            android:exported="false" />
+        <activity
+            android:name=".ui.activity.TestActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.activity.DummyWFD_LCMessageActivity"
             android:exported="false" />
         <activity
@@ -54,10 +60,10 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".ui.BroadcastSyncService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+<!--        <service-->
+<!--            android:name=".ui.BroadcastSyncService"-->
+<!--            android:exported="false"-->
+<!--            android:foregroundServiceType="dataSync" />-->
         <service
             android:name=".ui.utils.MessageRouterService"
             android:exported="false"

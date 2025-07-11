@@ -19,7 +19,6 @@ import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
 import android.text.TextUtils
@@ -32,28 +31,17 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.fordem.indifi.R
-import org.fordem.indifi.ui.db.DeviceInfo
-import org.fordem.indifi.ui.db.DeviceInfoDao
 import org.fordem.indifi.ui.db.DeviceInfoViewModel
-import org.fordem.indifi.ui.db.OwnDeviceInfo
 import org.fordem.indifi.ui.utils.Constants
-import org.fordem.indifi.ui.utils.Constants.ipLcGo
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
 import org.fordem.indifi.ui.utils.Constants.legacyClientCallback
-import org.fordem.indifi.ui.utils.Constants.myMembersList
 import org.fordem.indifi.ui.utils.MessageRouterHelper
-import org.fordem.indifi.ui.utils.MessageRouterService
 import org.fordem.indifi.ui.utils.buildJsonForDeviceList
 import org.fordem.indifi.ui.utils.getHotspotGatewayIP
 import org.fordem.indifi.ui.utils.getOwnIp
@@ -64,48 +52,16 @@ import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import javax.inject.Inject
 
 @AndroidEntryPoint
 class WifiScanActivity : AppCompatActivity() {
     private val deviceViewModel: DeviceInfoViewModel by viewModels()
-//    private val deviceInfoDao: DeviceInfoDao by viewModels()
-
     private lateinit var wifiManager: WifiManager
     private lateinit var wifiReceiver: BroadcastReceiver
     private lateinit var listView: ListView
     private lateinit var adapter: ArrayAdapter<String>
     private val wifiList = mutableListOf<String>()
     private val LOCATION_PERMISSION_CODE = 1001
-
-//    private var messageRouterService: MessageRouterService? = null
-//    private var isServiceBound = false
-//    private var currentP2pInfo: WifiP2pInfo? = null
-//    private val serviceConnection = object : ServiceConnection {
-//        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-//            val localBinder = binder as MessageRouterService.LocalBinder
-//            messageRouterService = localBinder.getService()
-//            isServiceBound = true
-//
-//            // You can now call service methods like:
-//            // messageRouterService?.startTcpServer(info, isGO)
-//
-//            messageRouterService?.startChatServer(
-//                context = this@WifiScanActivity,
-//                onMessageReceived = {
-//                }
-//            )
-//            messageRouterService?.startSilentReceiver(this@WifiScanActivity)
-//            messageRouterService?.startPrefSyncServer(this@WifiScanActivity, currentP2pInfo!!)
-//
-//        }
-//
-//        override fun onServiceDisconnected(name: ComponentName?) {
-//            messageRouterService = null
-//            isServiceBound = false
-//        }
-//    }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -157,64 +113,6 @@ class WifiScanActivity : AppCompatActivity() {
         legacyClientCallback = {
             deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
                 try {
-////                    val deferredValue = async(Dispatchers.IO) {
-////                        val ownIp = getHotspotGatewayIP(this@WifiScanActivity)
-////                    }
-////                    val ownIp = deferredValue.await()
-////                    delay(5000)
-//                    val ownIp = getOwnIp(this@WifiScanActivity, isGroupOwner = true)
-//                    if (ownIp.isNullOrBlank() || ownIp == "0.0.0.0") {
-//                        Handler(Looper.getMainLooper()).post {
-//                            Toast.makeText(applicationContext, "GO: Failed to get own IP", Toast.LENGTH_SHORT).show()
-//                            Log.e("LEGACY_GO", "GO failed to detect own IP")
-//                        }
-//                        return@launch
-//                    }
-//
-//                    // ✅ Step 2: Save into global constant
-//                    Constants.ipLcGo = ownIp
-//                    Log.d("LEGACY_GO", "GO own IP: $ownIp")
-//
-//                    Handler(Looper.getMainLooper()).post {
-//                        Log.d("LEGACY_GO", ipLcGo.toString())
-//                    }
-//
-////                    if (ipLcGo.isNullOrBlank() || ipLcGo == "0.0.0.0") {
-//////                    Toast.makeText(
-//////                        applicationContext,
-//////                        "Failed to get valid IP",
-//////                        Toast.LENGTH_SHORT
-//////                    ).show()
-////
-////                        Handler(Looper.getMainLooper()).post {
-////                            Log.d("LEGACY_GO", "Failed to get vvalid IP")
-////                        }
-////                        return@launch
-////                    }
-//
-//                    val ownName = Build.MODEL ?: "GO_Device"
-//                    val timestamp = System.currentTimeMillis()
-//
-//
-////                    not saving go entery into the db, start investigating from here
-//
-//                    val duplicate = deviceViewModel.isDuplicateDevice(ownName, ipLcGo!!, timestamp)
-//                    if (!duplicate) {
-//                        val goDevice = DeviceInfo(
-//                            name = ownName,
-//                            ip = ipLcGo!!,
-//                            isGroupOwner = true,
-//                            timestamp = timestamp
-//                        )
-//                        deviceViewModel.insert(goDevice)
-//                        Handler(Looper.getMainLooper()).post({
-//                            Log.d("LEGACY_GO", "Saved own device info: $goDevice")
-//
-//                            Toast.makeText(applicationContext, "Saved own devvice info", Toast.LENGTH_SHORT).show()
-//                        })
-//                    }
-
-
                     val allDevices = deviceViewModel.allDevices
                     allDevices.collect { deviceList ->
                         val dataToSend = buildJsonForDeviceList(deviceList)
@@ -232,53 +130,12 @@ class WifiScanActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e("Broadcast", "Failed: ${e.message}")
                 }
-//                }
             }
         }
-
-//        legacyClientCallback = {
-//            deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
-//                try {
-//                    val ownIp = getOwnIp(this@WifiScanActivity, true) ?: return@launch
-//                    val ownName = Build.MODEL ?: "GO_Device"
-//                    val timestamp = System.currentTimeMillis()
-//
-//                    val duplicate = deviceViewModel.isDuplicateDevice(ownName, ownIp, timestamp)
-//                    if (!duplicate) {
-//                        val goDevice = DeviceInfo(
-//                            name = ownName,
-//                            ip = ownIp,
-//                            isGroupOwner = true,
-//                            timestamp = timestamp
-//                        )
-//                        deviceViewModel.insert(goDevice)
-//                        Log.d("LEGACY_GO", "Saved own device info: $goDevice")
-//                    }
-//
-//                    // Wait for DB insert to propagate
-//                    delay(300)
-//
-//                    // Use first() for one-time snapshot
-//                    val deviceList = deviceViewModel.allDevices.first()
-//
-//                    val dataToSend = buildJsonForDeviceList(deviceList)
-//                    MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(dataToSend)
-//
-//                    Log.d("LEGACY_GO", "Broadcasted device list to GMs: $dataToSend")
-//                } catch (e: Exception) {
-//                    Log.e("LEGACY_GO", "Error in legacyClientCallback: ${e.message}")
-//                }
-//            }
-//        }
-
     }
 
     override fun onStart() {
         super.onStart()
-
-//        val intent = Intent(this, UdpListenerService::class.java)
-//        startService(intent)
-
         val connectedDevices = getConnectedDevicesFromARP()
         if (isHotspotEnabled(this) /*&& connectedDevices.isNotEmpty()*/) {
             isGoViaLegacy = true

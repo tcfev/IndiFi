@@ -17,7 +17,10 @@ ksp = "1.5.30-1.0.0"
 appcompat = "1.7.1" # KSP compatible with Kotlin 2.0
 
 kotlinxCoroutinesAndroid = "1.7.3"
+mcipher = "0.4"
 roomRuntime = "2.6.1"
+secureboxhelper = "1.4.0"
+simpleencryptionlib = "1.1.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +43,9 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+mcipher = { module = "com.tinmegali.android:mcipher", version.ref = "mcipher" }
+secureboxhelper = { module = "com.github.ptsiogas4:secureBoxHelper", version.ref = "secureboxhelper" }
+simpleencryptionlib = { module = "com.github.hummatli:SimpleEncryptionLib", version.ref = "simpleencryptionlib" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
