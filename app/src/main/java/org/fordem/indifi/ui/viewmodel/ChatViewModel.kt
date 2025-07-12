@@ -6,9 +6,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import org.fordem.indifi.ui.db.ChatMessageDao
-import org.fordem.indifi.ui.db.DeviceInfoDao
-import org.fordem.indifi.ui.db.PeerPublicKeyDao
+import org.fordem.indifi.ui.dao.ChatMessageDao
+import org.fordem.indifi.ui.dao.PeerPublicKeyDao
 import org.fordem.indifi.ui.encryption.KeyStoreManager
 import org.fordem.indifi.ui.model.ChatMessage
 import org.fordem.indifi.ui.model.PeerPublicKeyEntity

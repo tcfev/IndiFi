@@ -2,8 +2,12 @@ package org.fordem.indifi.ui.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import org.fordem.indifi.ui.dao.ChatMessageDao
+import org.fordem.indifi.ui.dao.DeviceInfoDao
+import org.fordem.indifi.ui.dao.PeerPublicKeyDao
 import org.fordem.indifi.ui.model.ChatMessage
 import org.fordem.indifi.ui.model.DeviceInfo
+import org.fordem.indifi.ui.model.OwnDeviceInfo
 import org.fordem.indifi.ui.model.PeerPublicKeyEntity
 
 @Database(

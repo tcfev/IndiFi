@@ -65,7 +65,7 @@
 <!--            android:exported="false"-->
 <!--            android:foregroundServiceType="dataSync" />-->
         <service
-            android:name=".ui.utils.MessageRouterService"
+            android:name=".ui.service.MessageRouterService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

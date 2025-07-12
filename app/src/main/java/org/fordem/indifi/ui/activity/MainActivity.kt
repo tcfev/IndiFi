@@ -13,12 +13,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import org.fordem.indifi.databinding.ActivityMainBinding
 import org.fordem.indifi.ui.adapter.DeviceAdapter
-import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.viewmodel.DeviceInfoViewModel
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
 import org.fordem.indifi.ui.utils.Constants.openChatCallback

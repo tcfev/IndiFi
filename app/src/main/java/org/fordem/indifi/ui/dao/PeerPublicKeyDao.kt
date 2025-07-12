@@ -1,4 +1,4 @@
-package org.fordem.indifi.ui.db
+package org.fordem.indifi.ui.dao
 
 import androidx.room.Dao
 import androidx.room.Insert

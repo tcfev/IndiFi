@@ -7,6 +7,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import org.fordem.indifi.ui.dao.ChatMessageDao
+import org.fordem.indifi.ui.dao.DeviceInfoDao
+import org.fordem.indifi.ui.dao.PeerPublicKeyDao
 import javax.inject.Singleton
 
 @Module

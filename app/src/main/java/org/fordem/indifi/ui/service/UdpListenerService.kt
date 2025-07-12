@@ -1,4 +1,4 @@
-//package org.fordem.indifi.ui.utils
+package org.fordem.indifi.ui.service//package org.fordem.indifi.ui.utils
 //
 //import android.app.Service
 //import android.content.Intent

@@ -1,8 +1,9 @@
-package org.fordem.indifi.ui.db
+package org.fordem.indifi.ui.dao
 
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import org.fordem.indifi.ui.model.OwnDeviceInfo
 import org.fordem.indifi.ui.model.DeviceInfo
 
 @Dao

@@ -33,18 +33,16 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.databinding.ActivityWifiDirectScreen1Binding
 import org.fordem.indifi.ui.model.DeviceInfo
-import org.fordem.indifi.ui.db.DeviceInfoDao
-import org.fordem.indifi.ui.db.DeviceInfoViewModel
-import org.fordem.indifi.ui.db.OwnDeviceInfo
-import org.fordem.indifi.ui.db.PeerPublicKeyDao
+import org.fordem.indifi.ui.dao.DeviceInfoDao
+import org.fordem.indifi.ui.viewmodel.DeviceInfoViewModel
+import org.fordem.indifi.ui.model.OwnDeviceInfo
+import org.fordem.indifi.ui.dao.PeerPublicKeyDao
 import org.fordem.indifi.ui.encryption.KeyStoreManager
-import org.fordem.indifi.ui.model.PeerPublicKeyEntity
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
 import org.fordem.indifi.ui.utils.Constants.myMembersList
 import org.fordem.indifi.ui.utils.MessageRouterHelper
@@ -357,7 +355,6 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
         }
     }
-
 
     private fun setupReceiver() {
         receiver = object : BroadcastReceiver() {

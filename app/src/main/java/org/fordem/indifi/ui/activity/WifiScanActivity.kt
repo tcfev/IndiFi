@@ -37,7 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import org.fordem.indifi.R
-import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.viewmodel.DeviceInfoViewModel
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
 import org.fordem.indifi.ui.utils.Constants.legacyClientCallback

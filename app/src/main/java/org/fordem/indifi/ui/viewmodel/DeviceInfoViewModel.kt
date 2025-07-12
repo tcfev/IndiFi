@@ -1,4 +1,4 @@
-package org.fordem.indifi.ui.db
+package org.fordem.indifi.ui.viewmodel
 
 import androidx.lifecycle.*
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.fordem.indifi.ui.dao.DeviceInfoDao
+import org.fordem.indifi.ui.model.OwnDeviceInfo
 import org.fordem.indifi.ui.model.DeviceInfo
 import javax.inject.Inject
 

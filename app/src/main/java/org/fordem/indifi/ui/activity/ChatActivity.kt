@@ -1,10 +1,7 @@
 package org.fordem.indifi.ui.activity
 
-import android.content.Context
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import android.widget.Button
@@ -18,32 +15,19 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.fordem.indifi.R
 import org.fordem.indifi.ui.adapter.MessageAdapter
-import org.fordem.indifi.ui.db.AppDatabase
-import org.fordem.indifi.ui.db.DeviceInfoViewModel
+import org.fordem.indifi.ui.viewmodel.DeviceInfoViewModel
 import org.fordem.indifi.ui.encryption.AESGCMHelper
 import org.fordem.indifi.ui.encryption.EncryptedMessageWrapper
 import org.fordem.indifi.ui.encryption.KeyStoreManager
-import org.fordem.indifi.ui.encryption.KeyStoreManager.toBase64
 import org.fordem.indifi.ui.model.ChatMessage
 import org.fordem.indifi.ui.model.Message
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.ui.utils.Constants.isChatMessage
 import org.fordem.indifi.ui.utils.MessageRouterHelper
-import org.fordem.indifi.ui.utils.TcpHelper
 import org.fordem.indifi.ui.viewmodel.ChatViewModel
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.BufferedWriter
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.Socket
 import java.security.PublicKey
 import java.util.UUID
 

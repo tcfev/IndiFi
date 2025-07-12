@@ -6,9 +6,9 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import org.fordem.indifi.ui.service.MessageRouterService
 
 object MessageRouterHelper {
-
     private var appContext: Context? = null
     var messageRouterService: MessageRouterService? = null
 
@@ -40,30 +40,30 @@ object MessageRouterHelper {
     /**
      * Send message to GM (GO or peer device sends to specific GM)
      */
-    fun sendMessageToGM(message: String) {
-        TcpHelper.sendMessageToClient(message)
-    }
+//    fun sendMessageToGM(message: String) {
+//        TcpHelper.sendMessageToClient(message)
+//    }
 
     /**
      * Broadcast message to all GMs (only for GO)
      */
-    fun broadcastToAllGMs(message: String) {
-        TcpHelper.broadcastToGMs(message)
-    }
+//    fun broadcastToAllGMs(message: String) {
+//        TcpHelper.broadcastToGMs(message)
+//    }
 
     /**
      * Send preferences update silently
      */
-    fun broadcastPrefsUpdateToAll(data: String) {
-        TcpHelper.broadcastSharedPrefsToClients(data)
-    }
+//    fun broadcastPrefsUpdateToAll(data: String) {
+//        TcpHelper.broadcastSharedPrefsToClients(data)
+//    }
 
     /**
      * Send custom GM list (GO to all GMs)
      */
-    fun broadcastGMList(gmList: List<String>) {
-        TcpHelper.broadcastGMListToAll(gmList)
-    }
+//    fun broadcastGMList(gmList: List<String>) {
+//        TcpHelper.broadcastGMListToAll(gmList)
+//    }
 
     /**
      * Optional: send a one-time hello to GO (for Legacy Wi-Fi)
