@@ -1,0 +1,56 @@
+Indifi – User Guide
+This app allows multiple Android devices to connect and communicate without internet using two connection modes:
+1. Wi-Fi Direct
+2. Legacy Wi-Fi (Hotspot-based)
+
+Connection Overview
+The app supports both device discovery and secure, end-to-end encrypted messaging between peers. On the Main Screen, all connected devices are listed. Tapping any listed node opens a chat screen to send/receive encrypted messages.
+
+Wi-Fi Direct Mode
+1. Start Discovery
+o Tap the Wi-Fi Direct button on the main screen.
+o On the next screen, tap the Discover button.
+o Grant all required permissions (Location, Wi-Fi access).
+o Tap Discover again. All nearby Wi-Fi Direct-compatible devices will appear in the list.
+o Repeat this on all devices that need to connect.
+2. Connect to a Device
+o Tap a device from the list to send a connection request.
+o The selected device will receive an invitation prompt.
+o Once accepted, a Wi-Fi Direct connection is established.
+* Note: The device sending the invitation becomes the Group Member (GM).
+* The device accepting becomes the Group Owner (GO).
+3. Start Chat
+o Both devices must now open the chat screen for the connected peer from the main screen.
+o Confirm you're chatting with the correct device (check device name, IP, and role).
+o Start sending encrypted messages in real-time.
+
+Legacy Wi-Fi (Hotspot) Mode
+1. Setup Hotspot
+o One device (acting as GO) must manually enable a Wi-Fi Hotspot.
+o Ensure the hotspot is open (no password).
+2. Connect as Client
+o On another device (acting as GM), go to the main screen and tap Legacy Client / Hotspot List.
+o Grant permissions if prompted.
+o Available open hotspots will be listed.
+o Tap to connect to the GO’s hotspot.
+o Once connected, the device will appear in the Main Screen list.
+3. Start Chat
+o Both GO and GM should open the chat screen for each other from the main screen.
+o Confirm details (device name, IP, and role).
+o Begin exchanging encrypted messages.
+
+Troubleshooting
+For Wi-Fi Direct:
+* If connection fails or the invitation is declined:
+o On the GO device, go to:
+Settings ? Wi-Fi ? Wi-Fi Direct
+o Remove all connected devices and disband the group.
+o Try reconnecting via the app.
+o Note: It is very much needed to send and have invitation request to the GO, after accepting the request, GO will be able to connect with another node. If this fails, retry with procedure above.
+For Legacy Wi-Fi:
+* If a device fails to connect to the hotspot:
+o Go to:
+Settings ? Wi-Fi Connections
+o Forget the GO’s hotspot.
+o Retry the connection through the app.
+
