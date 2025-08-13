@@ -37,7 +37,7 @@
 //                groupOwnerAddress?.let {
 ////                        TcpHelper.sendMessageToServer(it, msg)
 ////                    sendMessageToGo(it, msg)
-//                    MessageRouterHelper.messageRouterService?.sendMessageToServer(
+//                    MessageRouterHelper.indifiService?.sendMessageToServer(
 //                        hostAddress = it,
 //                        message = /*Constants.DummyLCMessage*/ msg
 //                    )

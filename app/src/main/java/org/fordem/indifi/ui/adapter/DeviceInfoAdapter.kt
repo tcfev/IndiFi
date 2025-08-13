@@ -24,7 +24,7 @@ class DeviceAdapter : RecyclerView.Adapter<DeviceAdapter.DeviceViewHolder>() {
         RecyclerView.ViewHolder(binding.root) {
         fun bind(device: DeviceInfo) {
             binding.tvDeviceName.text = device.name
-            binding.tvDeviceIp.text = device.ip
+            binding.tvDeviceIp.text = device.wfdIp
             binding.tvType.text = if (device.isGroupOwner) "GO" else "GM"
             binding.tvTime.text = DateFormat.getDateTimeInstance().format(Date(device.timestamp))
 

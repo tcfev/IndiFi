@@ -25,6 +25,7 @@ import org.fordem.indifi.ui.encryption.KeyStoreManager
 import org.fordem.indifi.ui.model.ChatMessage
 import org.fordem.indifi.ui.model.Message
 import org.fordem.indifi.ui.utils.Constants
+import org.fordem.indifi.ui.utils.Constants.gm_ip
 import org.fordem.indifi.ui.utils.Constants.isChatMessage
 import org.fordem.indifi.ui.utils.MessageRouterHelper
 import org.fordem.indifi.ui.viewmodel.ChatViewModel
@@ -41,7 +42,6 @@ class ChatActivity : AppCompatActivity() {
     private val messages = mutableListOf<Message>()
 
 
-    private var gm_ip: String? = null
     private var groupOwnerAddress: String? = null
     private var isGroupOwner = false
     private val deviceInfoViewModel: DeviceInfoViewModel by viewModels()
@@ -62,10 +62,14 @@ class ChatActivity : AppCompatActivity() {
         adapter = MessageAdapter(this, messages)
         listView.adapter = adapter
 
-        // Assume passed from WifiP2p connection
-        gm_ip = intent.getStringExtra("device_ip")
-        isGroupOwner = intent.getBooleanExtra("isGroupOwner", false)
-        groupOwnerAddress = intent.getStringExtra("groupOwnerAddress")
+//        // Assume passed from WifiP2p connection
+//        gm_ip = intent.getStringExtra("device_ip").toString()
+//        isGroupOwner = intent.getBooleanExtra("isGroupOwner", false)
+//        groupOwnerAddress = intent.getStringExtra("groupOwnerAddress")
+
+        gm_ip = intent.getStringExtra("peerIp") ?: error("peerIp missing")
+        val peerName = intent.getStringExtra("peerName") ?: "Unknown"
+//        val ownIp = intent.getStringExtra("ownIp") ?: getLocalIpAddress(this)
 
         chatViewModel.viewModelScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -83,130 +87,221 @@ class ChatActivity : AppCompatActivity() {
                 messages.add(Message(msg, true))
                 adapter.notifyDataSetChanged()
 
+//                if (groupOwnerAddress != gm_ip) {
+//                    if (isGroupOwner) {
+                isChatMessage = true
 
-                val chat = ChatMessage(senderName = getDeviceName(), senderIp = gm_ip.toString(), message = msg, timestamp = System.currentTimeMillis(), isIncoming = true)
-                chatViewModel.insertMessage(chat)
+                chatViewModel.viewModelScope.launch {
+                    val targetIp = gm_ip
+                    var peerKey: PublicKey?
+                    val messageId = UUID.randomUUID().toString().take(8)
 
-                if (groupOwnerAddress != gm_ip) {
-                    if (isGroupOwner) {
-                        isChatMessage = true
+                    // Step 1: Check in-memory first
+                    Log.d(
+                        "E2EE",
+                        "[$messageId][1] Checking in-memory public key for $targetIp"
+                    )
+                    peerKey = KeyStoreManager.getPeerPublicKey(targetIp)
 
-                        chatViewModel.viewModelScope.launch {
-                            val targetIp = gm_ip.toString()
-                            var peerKey: PublicKey? = null
-                            val messageId = UUID.randomUUID().toString().take(8)
+                    if (peerKey == null) {
+                        Log.w(
+                            "E2EE",
+                            "[$messageId][2] Not found in memory. Checking Room DB..."
+                        )
 
-                            // Step 1: Check in-memory first
-                            Log.d("E2EE", "[$messageId][1] Checking in-memory public key for $targetIp")
-                            peerKey = KeyStoreManager.getPeerPublicKey(targetIp)
-
-                            if (peerKey == null) {
-                                Log.w("E2EE", "[$messageId][2] Not found in memory. Checking Room DB...")
-
-                                // Step 2: Check Room DB fallback
-                                val entity = chatViewModel.getKey(targetIp)
-                                if (entity != null) {
-                                    peerKey = KeyStoreManager.base64ToPublicKey(entity.base64Key)
-                                    KeyStoreManager.addPeerPublicKey(targetIp, peerKey!!) // re-cache
-                                    Log.d("E2EE", "[$messageId][3] Loaded peer key from Room DB for $targetIp")
-                                } else {
-                                    Log.e("E2EE", "[$messageId][4] Peer public key not found in Room either — aborting.")
-                                    Toast.makeText(this@ChatActivity, "Peer public key not available", Toast.LENGTH_SHORT).show()
-                                    return@launch
-                                }
-                            }
-
-                            // Step 3: Derive or get AES key
-                            val aesKey = Constants.peerAESKeys?.get(targetIp)
-                                ?: KeyStoreManager.deriveSharedAESKey(peerKey).also {
-                                    Constants.peerAESKeys?.set(targetIp, it)
-                                    Constants.peerPublicKeys?.set(targetIp, peerKey!!)
-
-                                    Log.d("E2EE", "[$messageId][5] Derived AES key for $targetIp")
-                                    Log.d("E2EE", "[$messageId][5a] AES KEY (Base64): ${Base64.encodeToString(it.encoded, Base64.NO_WRAP)}")
-                                }
-
-                            // Step 4: Encrypt
-                            val (encryptedMsg, iv) = AESGCMHelper.encrypt(aesKey, msg)
-                            val ivBase64 = Base64.encodeToString(iv, Base64.NO_WRAP)
-                            val encryptedBase64 = Base64.encodeToString(encryptedMsg, Base64.NO_WRAP)
-
-                            Log.d("E2EE", "[$messageId][6] IV: $ivBase64")
-                            Log.d("E2EE", "[$messageId][6a] Encrypted: $encryptedBase64")
-
-                            val encryptedJson = EncryptedMessageWrapper.createJson(encryptedMsg, iv)
-
-                            Log.d("E2EE", "[$messageId][7] Sending encrypted message to $targetIp")
-                            MessageRouterHelper.messageRouterService?.connectToPeerAndSendMessage(targetIp, encryptedJson)
-
-                            inputField.text.clear()
+                        // Step 2: Check Room DB fallback
+                        val entity = chatViewModel.getKey(targetIp)
+                        if (entity != null) {
+                            peerKey = KeyStoreManager.base64ToPublicKey(entity.base64Key)
+                            KeyStoreManager.addPeerPublicKey(
+                                targetIp,
+                                peerKey
+                            ) // re-cache
+                            Log.d(
+                                "E2EE",
+                                "[$messageId][3] Loaded peer key from Room DB for $targetIp"
+                            )
+                        } else {
+                            Log.e(
+                                "E2EE",
+                                "[$messageId][4] Peer public key not found in Room either — aborting."
+                            )
+                            Toast.makeText(
+                                this@ChatActivity,
+                                "Peer public key not available",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@launch
                         }
-                    } else {
-                        groupOwnerAddress?.let {
-                            isChatMessage = true
-
-                            chatViewModel.viewModelScope.launch {
-                                val targetIp = it
-                                var peerKey: PublicKey?
-                                val messageId = UUID.randomUUID().toString().take(8)
-
-                                // Step 1: Check in-memory first
-                                Log.d("E2EE", "[$messageId][1] Checking in-memory public key for $targetIp")
-                                peerKey = KeyStoreManager.getPeerPublicKey(targetIp)
-
-                                if (peerKey == null) {
-                                    Log.w("E2EE", "[$messageId][2] Not found in memory. Checking Room DB...")
-
-                                    // Step 2: Check Room DB fallback
-                                    val entity = chatViewModel.getKey(targetIp)
-                                    if (entity != null) {
-                                        peerKey = KeyStoreManager.base64ToPublicKey(entity.base64Key)
-                                        KeyStoreManager.addPeerPublicKey(targetIp, peerKey!!) // re-cache
-                                        Log.d("E2EE", "[$messageId][3] Loaded peer key from Room DB for $targetIp")
-                                    } else {
-                                        Log.e("E2EE", "[$messageId][4] Peer public key not found in Room either — aborting.")
-                                        Toast.makeText(this@ChatActivity, "Peer public key not available", Toast.LENGTH_SHORT).show()
-                                        return@launch
-                                    }
-                                }
-
-                                // Step 3: Derive or get AES key
-                                val aesKey = Constants.peerAESKeys?.get(targetIp)
-                                    ?: KeyStoreManager.deriveSharedAESKey(peerKey!!).also {
-                                        Constants.peerAESKeys?.set(targetIp, it)
-                                        Constants.peerPublicKeys?.set(targetIp, peerKey!!)
-
-                                        Log.d("E2EE", "[$messageId][5] Derived AES key for $targetIp")
-                                        Log.d("E2EE", "[$messageId][5a] AES KEY (Base64): ${Base64.encodeToString(it.encoded, Base64.NO_WRAP)}")
-                                    }
-
-                                // Step 4: Encrypt
-                                val (encryptedMsg, iv) = AESGCMHelper.encrypt(aesKey, msg)
-                                val ivBase64 = Base64.encodeToString(iv, Base64.NO_WRAP)
-                                val encryptedBase64 = Base64.encodeToString(encryptedMsg, Base64.NO_WRAP)
-
-                                Log.d("E2EE", "[$messageId][6] IV: $ivBase64")
-                                Log.d("E2EE", "[$messageId][6a] Encrypted: $encryptedBase64")
-
-                                val encryptedJson = EncryptedMessageWrapper.createJson(encryptedMsg, iv)
-
-                                Log.d("E2EE", "[$messageId][7] Sending encrypted message to $targetIp")
-                                MessageRouterHelper.messageRouterService?.connectToPeerAndSendMessage(targetIp, encryptedJson)
-
-                                inputField.text.clear()
-                            }
-                        } //Send to GO
                     }
+
+                    // Step 3: Derive or get AES key
+                    val aesKey = Constants.peerAESKeys[targetIp]
+                        ?: KeyStoreManager.deriveSharedAESKey(peerKey).also {
+                            Constants.peerAESKeys[targetIp] = it
+                            Constants.peerPublicKeys[targetIp] = peerKey!!
+
+                            Log.d("E2EE", "[$messageId][5] Derived AES key for $targetIp")
+                            Log.d(
+                                "E2EE",
+                                "[$messageId][5a] AES KEY (Base64): ${
+                                    Base64.encodeToString(
+                                        it.encoded,
+                                        Base64.NO_WRAP
+                                    )
+                                }"
+                            )
+                        }
+
+                    // Step 4: Encrypt
+                    val (encryptedMsg, iv) = AESGCMHelper.encrypt(aesKey, msg)
+                    val ivBase64 = Base64.encodeToString(iv, Base64.NO_WRAP)
+                    val encryptedBase64 =
+                        Base64.encodeToString(encryptedMsg, Base64.NO_WRAP)
+
+                    Log.d("E2EE", "[$messageId][6] IV: $ivBase64")
+                    Log.d("E2EE", "[$messageId][6a] Encrypted: $encryptedBase64")
+
+                    val encryptedJson = EncryptedMessageWrapper.createJson(encryptedMsg, iv)
+
+                    Log.d("E2EE", "[$messageId][7] Sending encrypted message to $targetIp")
+                    MessageRouterHelper.indifiService?.connectToPeerAndSendMessage(
+                        targetIp,
+                        encryptedJson
+                    )
+
+                    val chat = ChatMessage(
+                        senderName = getDeviceName(),
+                        senderIp = groupOwnerAddress.toString(),
+                        message = msg,
+                        timestamp = System.currentTimeMillis(),
+                        isIncoming = false
+                    )
+                    chatViewModel.insertMessage(chat)
+
+                    inputField.text.clear()
                 }
+//                    } else {
+//                        groupOwnerAddress?.let {
+//                            isChatMessage = true
+//
+//                            chatViewModel.viewModelScope.launch {
+//                                val targetIp = it
+//                                var peerKey: PublicKey?
+//                                val messageId = UUID.randomUUID().toString().take(8)
+//
+//                                // Step 1: Check in-memory first
+//                                Log.d(
+//                                    "E2EE",
+//                                    "[$messageId][1] Checking in-memory public key for $targetIp"
+//                                )
+//                                peerKey = KeyStoreManager.getPeerPublicKey(targetIp)
+//
+//                                if (peerKey == null) {
+//                                    Log.w(
+//                                        "E2EE",
+//                                        "[$messageId][2] Not found in memory. Checking Room DB..."
+//                                    )
+//
+//                                    // Step 2: Check Room DB fallback
+//                                    val entity = chatViewModel.getKey(targetIp)
+//                                    if (entity != null) {
+//                                        peerKey =
+//                                            KeyStoreManager.base64ToPublicKey(entity.base64Key)
+//                                        KeyStoreManager.addPeerPublicKey(
+//                                            targetIp,
+//                                            peerKey!!
+//                                        ) // re-cache
+//                                        Log.d(
+//                                            "E2EE",
+//                                            "[$messageId][3] Loaded peer key from Room DB for $targetIp"
+//                                        )
+//                                    } else {
+//                                        Log.e(
+//                                            "E2EE",
+//                                            "[$messageId][4] Peer public key not found in Room either — aborting."
+//                                        )
+//                                        Toast.makeText(
+//                                            this@ChatActivity,
+//                                            "Peer public key not available",
+//                                            Toast.LENGTH_SHORT
+//                                        ).show()
+//                                        return@launch
+//                                    }
+//                                }
+//
+//                                // Step 3: Derive or get AES key
+//                                val aesKey = Constants.peerAESKeys[targetIp]
+//                                    ?: KeyStoreManager.deriveSharedAESKey(peerKey!!).also {
+//                                        Constants.peerAESKeys[targetIp] = it
+//                                        Constants.peerPublicKeys[targetIp] = peerKey!!
+//
+//                                        Log.d(
+//                                            "E2EE",
+//                                            "[$messageId][5] Derived AES key for $targetIp"
+//                                        )
+//                                        Log.d(
+//                                            "E2EE",
+//                                            "[$messageId][5a] AES KEY (Base64): ${
+//                                                Base64.encodeToString(
+//                                                    it.encoded,
+//                                                    Base64.NO_WRAP
+//                                                )
+//                                            }"
+//                                        )
+//                                    }
+//
+//                                // Step 4: Encrypt
+//                                val (encryptedMsg, iv) = AESGCMHelper.encrypt(aesKey, msg)
+//                                val ivBase64 = Base64.encodeToString(iv, Base64.NO_WRAP)
+//                                val encryptedBase64 =
+//                                    Base64.encodeToString(encryptedMsg, Base64.NO_WRAP)
+//
+//                                Log.d("E2EE", "[$messageId][6] IV: $ivBase64")
+//                                Log.d("E2EE", "[$messageId][6a] Encrypted: $encryptedBase64")
+//
+//                                val encryptedJson =
+//                                    EncryptedMessageWrapper.createJson(encryptedMsg, iv)
+//
+//                                Log.d(
+//                                    "E2EE",
+//                                    "[$messageId][7] Sending encrypted message to $targetIp"
+//                                )
+//                                MessageRouterHelper.indifiService?.connectToPeerAndSendMessage(
+//                                    targetIp,
+//                                    encryptedJson
+//                                )
+//
+//                                val chat = ChatMessage(
+//                                    senderName = getDeviceName(),
+//                                    senderIp = gm_ip,
+//                                    message = msg,
+//                                    timestamp = System.currentTimeMillis(),
+//                                    isIncoming = false
+//                                )
+//                                chatViewModel.insertMessage(chat)
+//
+//                                inputField.text.clear()
+//                            }
+//                        } //Send to GO
+//                    }
+//                }
             }
         }
 
-        Constants.chatCallback = {
+        Constants.chatCallback = { senderIP, message ->
             runOnUiThread {
-                messages.add(Message(it, false))
+                messages.add(Message(message, false))
                 adapter.notifyDataSetChanged()
 
-                val chat = ChatMessage(senderName = getDeviceName(), senderIp = gm_ip.toString(), message = it, timestamp = System.currentTimeMillis(), isIncoming = true)
+//                fix receiver IP here to show in db separately
+                val chat = ChatMessage(
+                    senderName = getDeviceName(),
+                    senderIp = senderIP,
+                    message = message,
+                    timestamp = System.currentTimeMillis(),
+                    isIncoming = true
+                )
                 chatViewModel.insertMessage(chat)
             }
         }
@@ -216,7 +311,7 @@ class ChatActivity : AppCompatActivity() {
         super.onDestroy()
         if (!isGroupOwner && groupOwnerAddress != null) {
             val deviceName = getDeviceName()
-            MessageRouterHelper.messageRouterService?.sendMessageToServer(
+            MessageRouterHelper.indifiService?.sendMessageToServerAsWfd(
                 groupOwnerAddress!!,
                 "__LEFT__:$deviceName"
             )

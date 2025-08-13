@@ -6,11 +6,14 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
-import org.fordem.indifi.ui.service.MessageRouterService
+import androidx.core.content.ContextCompat
+import org.fordem.indifi.ui.service.IndifiService
+import org.fordem.indifi.ui.service.MulticastService
 
 object MessageRouterHelper {
     private var appContext: Context? = null
-    var messageRouterService: MessageRouterService? = null
+    var indifiService: IndifiService? = null
+    var multicastService: MulticastService? = null
 
     fun initialize(context: Context) {
         if (appContext == null) {
@@ -23,10 +26,17 @@ object MessageRouterHelper {
     /**
      * Start the background message service (must be called once, e.g. from main activity)
      */
-    fun startMessageRouterService() {
+    fun startIndifiService() {
         appContext?.let {
-            val intent = Intent(it, MessageRouterService::class.java)
-            it.startService(intent)
+            val intent = Intent(it, IndifiService::class.java)
+            ContextCompat.startForegroundService(it, intent)
+        }
+    }
+
+    fun startMulticastService() {
+        appContext?.let {
+            val intent = Intent(it, MulticastService::class.java)
+            ContextCompat.startForegroundService(it, intent)
         }
     }
 
@@ -34,7 +44,7 @@ object MessageRouterHelper {
      * Send message to GO (Legacy Wi-Fi client)
      */
 //    fun sendMessageToGo(goIp: String, message: String) {
-//        MessageRouterService.sendMessageToServer(goIp, message)
+//        IndifiService.sendMessageToServer(goIp, message)
 //    }
 
     /**
@@ -69,30 +79,53 @@ object MessageRouterHelper {
      * Optional: send a one-time hello to GO (for Legacy Wi-Fi)
      */
 //    fun sendHelloToGO(gatewayIp: String) {
-//        MessageRouterService.sendMessageToServer(gatewayIp, Constants.DummyLCMessage)
+//        IndifiService.sendMessageToServer(gatewayIp, Constants.DummyLCMessage)
 //    }
 
-//    var messageRouterService: MessageRouterService? = null
+//    var IndifiService: IndifiService? = null
     var isServiceBound = false
+    var isMulticastServiceBound = false
 
-    val serviceConnection = object : ServiceConnection {
+    private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            val localBinder = binder as MessageRouterService.LocalBinder
-            messageRouterService = localBinder.getService()
+            val localBinder = binder as IndifiService.LocalBinder
+            indifiService = localBinder.getService()
             isServiceBound = true
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            messageRouterService = null
+            indifiService = null
             isServiceBound = false
+        }
+    }
+
+
+    private val multicastServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val localBinder = binder as MulticastService.LocalBinder
+            multicastService = localBinder.getService()
+            isMulticastServiceBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            multicastService = null
+            isMulticastServiceBound = false
         }
     }
 
     fun bindService(context: Context) {
         if (!isServiceBound) {
-            val intent = Intent(context, MessageRouterService::class.java)
+            val intent = Intent(context, IndifiService::class.java)
+            ContextCompat.startForegroundService(context, intent) // optional: keep it running
             context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-            context.startService(intent) // optional: keep it running
+        }
+    }
+
+    fun bindMulticastService(context: Context) {
+        if (!isServiceBound) {
+            val intent = Intent(context, MulticastService::class.java)
+            ContextCompat.startForegroundService(context, intent) // optional: keep it running
+            context.bindService(intent, multicastServiceConnection, Context.BIND_AUTO_CREATE)
         }
     }
 

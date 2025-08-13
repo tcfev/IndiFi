@@ -32,7 +32,7 @@ class WifiDirectActivity : AppCompatActivity() {
         ActivityWifiDirectBinding.inflate(layoutInflater)
     }
 
-    private lateinit var peerListView: ListView
+//    private lateinit var peerListView: ListView
     private lateinit var peerAdapter: ArrayAdapter<String>
 
     private lateinit var wifiP2pManager: WifiP2pManager
@@ -49,11 +49,11 @@ class WifiDirectActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_wifi_direct)
+        setContentView(binding.root)
 
-        peerListView = findViewById(R.id.lvPeers)
+//        peerListView = findViewById(R.id.lvPeers)
         peerAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList())
-        peerListView.adapter = peerAdapter
+        binding.lvPeers.adapter = peerAdapter
 
         wifiP2pManager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
         channel = wifiP2pManager.initialize(this, mainLooper, null)
@@ -71,7 +71,7 @@ class WifiDirectActivity : AppCompatActivity() {
             )
         }
 
-        peerListView.setOnItemClickListener { _, _, position, _ ->
+        binding.lvPeers.setOnItemClickListener { _, _, position, _ ->
             val device = peers[position]
             val config = WifiP2pConfig().apply {
                 deviceAddress = device.deviceAddress

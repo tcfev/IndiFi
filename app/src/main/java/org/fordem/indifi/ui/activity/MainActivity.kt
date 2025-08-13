@@ -16,6 +16,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.fordem.indifi.databinding.ActivityMainBinding
 import org.fordem.indifi.ui.adapter.DeviceAdapter
+import org.fordem.indifi.ui.utils.Constants.connectivityManager
 import org.fordem.indifi.ui.viewmodel.DeviceInfoViewModel
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
 import org.fordem.indifi.ui.utils.Constants.isGoViaLegacy
@@ -30,7 +31,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val messageRouterHelper = MessageRouterHelper
-
     private val deviceInfoViewModel: DeviceInfoViewModel by viewModels()
     private lateinit var adapter: DeviceAdapter
 
@@ -40,61 +40,86 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContentView(binding.root)
 
-        messageRouterHelper.bindService(this)
-        messageRouterHelper.startMessageRouterService()
+//        GM1 is having LC connection to GO2 but receives multicast messages only and unable
+//        to send multicast messages, WFD groups internally working fine, break the code from
+//        both LC-GM and LC-GO sides and try to figure out the problem.
+
+//        messageRouterHelper.startIndifiService()
+//        messageRouterHelper.bindService(this)
+
+//        openChatCallback = { selectedDevice ->
+//            lifecycleScope.launch {
+//                if (isGOViaWFD && !isGoViaLegacy/*selectedDevice.name != "GM_Device"*/) {
+//                    val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
+//
+//                    if (ownInfo != null) {
+//                        isGOViaWFD = ownInfo.isGroupOwner
+//                    }
+//                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
+//                        putExtra("device_ip", selectedDevice.ip)
+//                        putExtra("device_name", selectedDevice.name)
+//                        if (ownInfo != null) {
+//                            putExtra("groupOwnerAddress", ownInfo.ip)
+//                        } // GO knows GM IP
+//
+//                        // Based on this device's role (not the selected device)
+//                        if (isGOViaWFD || selectedDevice.ip != ownInfo?.ip) {
+//                            putExtra("isGroupOwner", true)
+//                        } else {
+//                            putExtra("isGroupOwner", false)
+//                        }
+//                    }
+//                    startActivity(intent)
+//                } else {
+//                    val ownIp = getLocalIpAddress(this@MainActivity)
+//                    val selectedIp = selectedDevice.ip
+//
+//                    val isSelf = ownIp == selectedIp
+//                    val isGO = deviceInfoViewModel.getOwnInfoDirect()?.isGroupOwner == true
+//
+//                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
+//                        putExtra("device_ip", /*selectedDevice.ip*/ownIp)
+//                        putExtra("device_name", selectedDevice.name)
+//
+//                        if (isSelf) {
+//                            Toast.makeText(this@MainActivity, "You cannot chat with yourself", Toast.LENGTH_SHORT).show()
+//                            return@apply
+//                        }
+//
+//                        if (isGO) {
+//                            putExtra("isGroupOwner", true)
+//                            putExtra("groupOwnerAddress", ownIp)
+//                        } else {
+//                            putExtra("isGroupOwner", false)
+//                            putExtra("groupOwnerAddress", selectedIp)
+//                        }
+//                    }
+//                    startActivity(intent)
+//
+//                }
+//            }
+//        }
 
         openChatCallback = { selectedDevice ->
             lifecycleScope.launch {
-                if (isGOViaWFD && !isGoViaLegacy/*selectedDevice.name != "GM_Device"*/) {
-                    val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
+                val ownInfo = deviceInfoViewModel.getOwnInfoDirect()
+                val ownIp = ownInfo?.ip ?: getLocalIpAddress(this@MainActivity)
+                val selectedIp = selectedDevice.wfdIp
 
-                    if (ownInfo != null) {
-                        isGOViaWFD = ownInfo.isGroupOwner
-                    }
-                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
-                        putExtra("device_ip", selectedDevice.ip)
-                        putExtra("device_name", selectedDevice.name)
-                        if (ownInfo != null) {
-                            putExtra("groupOwnerAddress", ownInfo.ip)
-                        } // GO knows GM IP
-
-                        // Based on this device's role (not the selected device)
-                        if (isGOViaWFD || selectedDevice.ip != ownInfo?.ip) {
-                            putExtra("isGroupOwner", true)
-                        } else {
-                            putExtra("isGroupOwner", false)
-                        }
-                    }
-                    startActivity(intent)
-                } else {
-                    val ownIp = getLocalIpAddress(this@MainActivity)
-                    val selectedIp = selectedDevice.ip
-
-                    val isSelf = ownIp == selectedIp
-                    val isGO = deviceInfoViewModel.getOwnInfoDirect()?.isGroupOwner == true
-
-                    val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
-                        putExtra("device_ip", /*selectedDevice.ip*/ownIp)
-                        putExtra("device_name", selectedDevice.name)
-
-                        if (isSelf) {
-                            Toast.makeText(this@MainActivity, "You cannot chat with yourself", Toast.LENGTH_SHORT).show()
-                            return@apply
-                        }
-
-                        if (isGO) {
-                            putExtra("isGroupOwner", true)
-                            putExtra("groupOwnerAddress", ownIp)
-                        } else {
-                            putExtra("isGroupOwner", false)
-                            putExtra("groupOwnerAddress", selectedIp)
-                        }
-                    }
-                    startActivity(intent)
-
+                if (ownIp == selectedIp) {
+                    Toast.makeText(this@MainActivity, "You cannot chat with yourself", Toast.LENGTH_SHORT).show()
+                    return@launch
                 }
+
+                val intent = Intent(this@MainActivity, ChatActivity::class.java).apply {
+                    putExtra("peerIp", selectedIp)               // Actual target IP
+                    putExtra("peerName", selectedDevice.name)    // Target device name
+                    putExtra("ownIp", ownIp)                     // Own IP (optional for reference)
+                }
+                startActivity(intent)
             }
         }
+
 
         adapter = DeviceAdapter()
         binding.recyclerView.adapter = adapter
@@ -120,8 +145,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getLocalIpAddress(context: Context): String? {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val linkProperties = cm.getLinkProperties(cm.activeNetwork) ?: return null
+        connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val linkProperties = connectivityManager!!.getLinkProperties(connectivityManager!!.activeNetwork) ?: return null
 
         return linkProperties.linkAddresses
             .map { it.address.hostAddress }
@@ -136,15 +161,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
-        MessageRouterHelper.unbindService(this)
-        super.onDestroy()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        MessageRouterHelper.unbindService(this)
-    }
+//    override fun onDestroy() {
+//        MessageRouterHelper.unbindService(this)
+//        super.onDestroy()
+//    }
+//
+//    override fun onStop() {
+//        super.onStop()
+//        MessageRouterHelper.unbindService(this)
+//    }
 }
 
 

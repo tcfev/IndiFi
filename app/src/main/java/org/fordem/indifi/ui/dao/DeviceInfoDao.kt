@@ -27,10 +27,10 @@ interface DeviceInfoDao {
     @Query("SELECT * FROM device_info")
     suspend fun getAllDevicesOnce(): List<DeviceInfo>
 
-    @Query("SELECT * FROM device_info WHERE deviceId = :deviceId")
+    @Query("SELECT * FROM device_info WHERE androidId = :deviceId")
     suspend fun getDeviceById(deviceId: String): DeviceInfo?
 
-    @Query("SELECT * FROM device_info WHERE name = :name AND ip = :ip AND (:currentTime - timestamp) < :window LIMIT 1")
+    @Query("SELECT * FROM device_info WHERE name = :name AND wfdIp = :ip AND (:currentTime - timestamp) < :window LIMIT 1")
     fun findRecentDevice(
         name: String,
         ip: String,
@@ -39,10 +39,13 @@ interface DeviceInfoDao {
     ): LiveData<DeviceInfo?>
 
     @Query("SELECT * FROM device_info WHERE name = :name")
-    suspend fun findByName(name: String): List<DeviceInfo>
+    fun findByName(name: String): List<DeviceInfo>
 
-    @Query("SELECT * FROM device_info WHERE ip = :ip")
+    @Query("SELECT * FROM device_info WHERE wfdIp = :ip")
     suspend fun findByIp(ip: String): List<DeviceInfo>
+
+    @Query("SELECT * FROM device_info WHERE androidId = :androidId")
+    suspend fun findByAndroidId(androidId: String): List<DeviceInfo>
 
     @Query("SELECT * FROM device_info WHERE ABS(:currentTime - timestamp) < :window")
     suspend fun findRecent(currentTime: Long, window: Long = 5 * 60 * 1000): List<DeviceInfo>
@@ -56,11 +59,59 @@ interface DeviceInfoDao {
     @Query("SELECT * FROM own_device_info WHERE id = 1 LIMIT 1")
     suspend fun getOwnInfoDirect(): OwnDeviceInfo?
 
-    @Query("SELECT COUNT(*) FROM device_info WHERE name = :name AND ip = :ip AND ABS(timestamp - :timestamp) < :timeWindow")
+//    @Query("SELECT COUNT(*) FROM device_info WHERE name = :name AND ip = :ip AND androidId = :androidId AND ABS(timestamp - :timestamp) < :timeWindow")
+//    suspend fun isDuplicateDevice(
+//        name: String,
+//        ip: String,
+//        androidId: String,
+//        timestamp: Long,
+//        timeWindow: Long = 5 * 60 * 1000 // 5 min
+//    ): Boolean
+
+    @Query("SELECT COUNT(*) FROM device_info WHERE name = :name AND androidId = :androidId")
     suspend fun isDuplicateDevice(
         name: String,
-        ip: String,
-        timestamp: Long,
-        timeWindow: Long = 5 * 60 * 1000 // 5 min
-    ): Boolean
+        androidId: String
+    ): Int
+
+
+    @Query("SELECT COUNT(*) FROM device_info WHERE name = :name AND wfdIp = :ip AND timestamp = :timestamp AND androidId = :androidId")
+    suspend fun exists(name: String, ip: String, timestamp: Long, androidId: String): Int
+
+    @Query("UPDATE device_info SET lcIp = :newLcIp, isRelayDevice = :isRelayDevice WHERE isGroupOwner = :isGroupOwner")
+    suspend fun updateLcIpByNameAndRole(
+        newLcIp: String,
+        isGroupOwner: Boolean,
+        isRelayDevice: Boolean
+    )
+
+//    @Query("UPDATE device_info SET lcIp = :newLcIp, isRelayDevice = :isRelayDevice WHERE androidId = :androidId AND isGroupOwner = 1")
+    @Query("UPDATE device_info SET lcIp = :newLcIp, isRelayDevice = :isRelayDevice WHERE androidId = :androidId")
+    suspend fun updateLcIpByAndroidId(
+        androidId: String,
+        newLcIp: String,
+        isRelayDevice: Boolean
+    )
+
+    @Query("""
+    SELECT * FROM device_info 
+    WHERE isGroupOwner = 1 
+      AND wfdIp IS NOT NULL 
+      AND groupId = :groupId 
+    ORDER BY timestamp DESC 
+    LIMIT 1
+""")
+    suspend fun getLatestWfdGoDeviceByGroupId(groupId: String): DeviceInfo?
+
+
+    @Query("""
+    UPDATE device_info
+    SET wfdIp = :newWfdIp
+    WHERE groupId = :groupId AND isGroupOwner = 1
+""")
+    suspend fun updateWfdIpByNameAndGroupId(
+        groupId: String,
+        newWfdIp: String
+    )
+
 }

@@ -7,7 +7,12 @@ import androidx.room.PrimaryKey
 data class DeviceInfo(
     @PrimaryKey(autoGenerate = true) val deviceId: Int = 0,  // e.g., GM_1, GO_xT, etc.
     val name: String,
-    val ip: String,
-    val isGroupOwner: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val wfdIp: String,
+    val lcIp: String,
+    val androidId: String,
+    val groupId: String, // Group ID (same for all devices in same WFD/LC group)
+    val isGroupOwner: Boolean, // Is this device the GO?
+    val isRelayDevice: Boolean,
+    val timestamp: Long = System.currentTimeMillis(),
+    val base64Key: String
 )

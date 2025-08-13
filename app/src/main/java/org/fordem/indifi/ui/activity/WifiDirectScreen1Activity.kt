@@ -33,8 +33,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.fordem.indifi.ui.utils.Constants
 import org.fordem.indifi.databinding.ActivityWifiDirectScreen1Binding
 import org.fordem.indifi.ui.model.DeviceInfo
@@ -46,9 +49,15 @@ import org.fordem.indifi.ui.encryption.KeyStoreManager
 import org.fordem.indifi.ui.utils.Constants.isGOViaWFD
 import org.fordem.indifi.ui.utils.Constants.myMembersList
 import org.fordem.indifi.ui.utils.MessageRouterHelper
+import org.fordem.indifi.ui.utils.NetworkBinder
+import org.fordem.indifi.ui.utils.buildJsonForDeviceList
+import org.fordem.indifi.ui.utils.buildJsonForPeerKeys
+import org.fordem.indifi.ui.utils.buildWfdHelloMessage
+import org.fordem.indifi.ui.viewmodel.PeerPublicKeyViewModel
 import org.json.JSONObject
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.UUID
 import javax.inject.Inject
 
 @Suppress("DEPRECATION")
@@ -56,6 +65,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class WifiDirectScreen1Activity : AppCompatActivity() {
     private val deviceViewModel: DeviceInfoViewModel by viewModels()
+    private val peerPublicKeyViewModel: PeerPublicKeyViewModel by viewModels()
 
     private var currentP2pInfo: WifiP2pInfo? = null
     private val binding: ActivityWifiDirectScreen1Binding by lazy {
@@ -70,8 +80,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         )
     } else {
         arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.CHANGE_WIFI_STATE
+            Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CHANGE_WIFI_STATE
         )
     }
 
@@ -98,6 +107,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 
     @Inject
     lateinit var peerPublicKeyDao: PeerPublicKeyDao
+    private val messageRouterHelper = MessageRouterHelper
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,6 +119,18 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         peerAdapter = ArrayAdapter(this, R.layout.simple_list_item_1, ArrayList())
         binding.lvPeers.adapter = peerAdapter
 
+//        NetworkBinder.unbind()
+//        connectivityManager.bindProcessToNetwork(null)
+//        if (networkCallback != null) {
+//            try {
+//                connectivityManager.unregisterNetworkCallback(networkCallback!!)
+//            } catch (_: Exception) { }
+//        }
+//        Log.d("NetworkBinder", " Unbound from $currentBoundInterface")
+//        networkCallback = null
+//        currentBoundInterface = null
+
+
         wifiP2pManager = getSystemService(WIFI_P2P_SERVICE) as WifiP2pManager
         channel = wifiP2pManager.initialize(this, mainLooper, null)
         setupIntentFilter()
@@ -119,12 +141,10 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                 if (group != null) {
                     if (group.isGroupOwner) {
                         // Device is GO → prompt user before disbanding group
-                        AlertDialog.Builder(this)
-                            .setTitle("Disband Group?")
+                        AlertDialog.Builder(this).setTitle("Disband Group?")
                             .setMessage("You are the Group Owner. Disbanding will disconnect all members. Proceed?")
                             .setPositiveButton("Yes") { _, _ ->
-                                wifiP2pManager.removeGroup(
-                                    channel,
+                                wifiP2pManager.removeGroup(channel,
                                     object : WifiP2pManager.ActionListener {
                                         override fun onSuccess() {
                                             getSharedPreferences("group_info", MODE_PRIVATE).edit()
@@ -147,9 +167,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                             ).show()
                                         }
                                     })
-                            }
-                            .setNegativeButton("No", null)
-                            .show()
+                            }.setNegativeButton("No", null).show()
                     } else {
                         // Device is GM → leave the group
                         wifiP2pManager.removeGroup(channel, object : WifiP2pManager.ActionListener {
@@ -193,17 +211,14 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                 }
 
                 !isWifiEnabled(this) -> {
-                    Toast.makeText(this, "Please Turn on Wifi", Toast.LENGTH_LONG)
-                        .show()
+                    Toast.makeText(this, "Please Turn on Wifi", Toast.LENGTH_LONG).show()
                     val panelIntent = Intent(Settings.ACTION_WIFI_SETTINGS)
                     startActivity(panelIntent)
                 }
 
                 else -> {
                     Toast.makeText(
-                        this,
-                        "All checks passed. Starting Wi-Fi Direct...",
-                        Toast.LENGTH_SHORT
+                        this, "All checks passed. Starting Wi-Fi Direct...", Toast.LENGTH_SHORT
                     ).show()
 
                     discoverPeers()
@@ -223,11 +238,27 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             try {
                 wifiP2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
+                        val identifier = device.deviceName
+                            ?: device.deviceAddress // Fallback to MAC if name is null
+                        saveConnectedDeviceMac(
+                            this@WifiDirectScreen1Activity,
+                            identifier,
+                            device.deviceAddress
+                        )
+
                         Toast.makeText(
                             this@WifiDirectScreen1Activity,
                             "Connecting to ${device.deviceName}",
                             Toast.LENGTH_SHORT
                         ).show()
+
+
+//                        messageRouterHelper.startIndifiService()
+//                        messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+//
+//                        messageRouterHelper.startMulticastService()
+//                        messageRouterHelper.bindMulticastService(this@WifiDirectScreen1Activity)
+
                     }
 
                     override fun onFailure(reason: Int) {
@@ -245,72 +276,116 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         }
 
         Constants.deviceConnectionCallback = { gmIP: String ->
-
             val lastMember = myMembersList.last()
             val gmNumber = myMembersList.size + 1
             gmName = lastMember.deviceName
             gmMac = lastMember.deviceAddress
             val timestamp = System.currentTimeMillis()
 
+//            val device = DeviceInfo(
+//                name = gmName,
+//                ip = gmIP,
+//                androidId = "",
+//                isGroupOwner = false,
+//                timestamp = timestamp
+//            )
 
-            val device = DeviceInfo(
-                name = gmName,
-                ip = gmIP,
-                isGroupOwner = false,
-                timestamp = timestamp
-            )
+//            deviceViewModel.viewModelScope.launch(Dispatchers.Main) {
+//                val exists = deviceViewModel.isDuplicateDevice(device.name, device.ip, device.androidId)
+//                if (!exists) {
+//                    deviceViewModel.insert(device)
+//                } else {
+//                    Log.d(
+//                        "DB",
+//                        "Device already exists with name ${device.name}, IP ${device.ip}, recent timestamp"
+//                    )
+//                }
 
-            deviceViewModel.viewModelScope.launch(Dispatchers.Main) {
-                val exists =
-                    deviceViewModel.isDuplicateDevice(device.name, device.ip, device.timestamp)
-                if (!exists) {
-                    deviceViewModel.insert(device)
+            deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val allDevices = deviceViewModel.allDevices
+                    allDevices.collect { deviceList ->
+                        val dataToSend = buildJsonForDeviceList(deviceList)
 
-                    lifecycleScope.launch(Dispatchers.IO) {
                         try {
-                            val allDevices = deviceViewModel.allDevices
-                            allDevices.collect { deviceList ->
-                                val dataToSend = buildJsonForDeviceList(deviceList)
+                            MessageRouterHelper.indifiService?.broadcastMessageToAllWfdPeers(
+                                dataToSend
+                            )
 
-                                try {
-                                    MessageRouterHelper.messageRouterService?.broadcastMessageToAllGMs(
-                                        dataToSend
-                                    )
-
-                                } catch (e: Exception) {
-                                    Log.e("Broadcast", "Failed to send to: ${e.message}")
-                                }
-                            }
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
+                            Log.e("Broadcast", "Failed to send to: ${e.message}")
                         }
                     }
 
-                } else {
-                    Log.d(
-                        "DB",
-                        "Device already exists with name ${device.name}, IP ${device.ip}, recent timestamp"
-                    )
+
+//                    val allKeysFlow = peerPublicKeyDao.getAllKeys() // Flow<List<PeerKeyInfo>>
+//                    allKeysFlow.collect { keyList ->
+//                        val dataToSend = buildJsonForPeerKeys(keyList)
+//
+//                        try {
+//                            MessageRouterHelper.indifiService?.broadcastMessageToAllGMs(
+//                                dataToSend
+//                            )
+//                        } catch (e: Exception) {
+//                            Log.e("BroadcastKeys", "Failed to send keys: ${e.message}")
+//                        }
+//                    }
+                } catch (e: Exception) {
+                    Log.e("Broadcast", "Failed to send Devices list to: ${e.message}")
+                }
+                delay(3000)
+            }
+
+
+            peerPublicKeyViewModel.viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val allKeysFlow = peerPublicKeyViewModel.allKeys // Flow<List<PeerKeyInfo>>
+                    allKeysFlow.collect { keyList ->
+                        val dataToSend = buildJsonForPeerKeys(keyList)
+
+                        try {
+                            MessageRouterHelper.indifiService?.broadcastMessageToAllWfdPeers(
+                                dataToSend
+                            )
+                        } catch (e: Exception) {
+                            Log.e("BroadcastKeys", "Failed to send keys: ${e.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("Broadcast", "Failed to send peer keys list to: ${e.message}")
                 }
             }
+
+//            }
         }
     }
 
-    private fun buildJsonForDeviceList(deviceList: List<DeviceInfo>): String {
-        val jsonArray = org.json.JSONArray()
+    fun saveConnectedDeviceMac(context: Context, identifier: String, macAddress: String) {
+        val prefs = context.getSharedPreferences("connected_devices", Context.MODE_PRIVATE)
+        val jsonString = prefs.getString("device_mac_map", "{}")
+        val jsonObject = jsonString?.let { JSONObject(it) }
 
-        deviceList.forEach { device ->
-            val json = JSONObject()
-            json.put("deviceId", device.deviceId)
-            json.put("name", device.name)
-            json.put("ip", device.ip)
-            json.put("isGroupOwner", device.isGroupOwner)
-            json.put("timestamp", device.timestamp)
-            jsonArray.put(json)
-        }
+        jsonObject?.put(identifier, macAddress)
 
-        return "DEVICE_LIST:$jsonArray"
+        prefs.edit().putString("device_mac_map", jsonObject.toString()).apply()
     }
 
+//    private fun buildJsonForDeviceList(deviceList: List<DeviceInfo>): String {
+//        val jsonArray = org.json.JSONArray()
+//
+//        deviceList.forEach { device ->
+//            val json = JSONObject()
+//            json.put("deviceId", device.deviceId)
+//            json.put("name", device.name)
+//            json.put("ip", device.ip)
+//            json.put("androidId", device.androidId)
+//            json.put("isGroupOwner", device.isGroupOwner)
+//            json.put("timestamp", device.timestamp)
+//            jsonArray.put(json)
+//        }
+//
+//        return "DEVICE_LIST:$jsonArray"
+//    }
 
     private fun checkAndRequestPermissions() {
         if (!hasAllPermissions()) {
@@ -393,29 +468,69 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                     try {
                                         wifiP2pManager.requestGroupInfo(channel) { group ->
                                             if (group != null) {
+//                                                CoroutineScope(Dispatchers.IO).launch {
+//                                                    delay(3000) // let soft-AP stabilize
+//
+//                                                    Log.d(
+//                                                        "LC-GO",
+//                                                        "Soft-AP is up on wlan0. Starting IndifiService"
+//                                                    )
+//                                                    withContext(Dispatchers.Main) {
+//                                                        Toast.makeText(
+//                                                            this@WifiDirectScreen1Activity,
+//                                                            "LC-GO Soft-AP is up on wlan0. Starting IndifiService",
+//                                                            Toast.LENGTH_SHORT
+//                                                        ).show()
+//                                                    }
+//
+//                                                    messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+//                                                    messageRouterHelper.startIndifiService()
+//                                                }
+
+
                                                 isGOViaWFD = group.isGroupOwner
+                                                val ssid = group.networkName
+                                                val password = group.passphrase
+//                                                val goIp = group.owner.ipAddress
+
+
+                                                Log.d(
+                                                    "GO",
+                                                    "Group Formed, ssid: $ssid, pass: $password"
+                                                )
 
                                                 if (isGOViaWFD) {
+
                                                     myMembersList =
                                                         group.clientList // The list of devices attached to the group
 
                                                     collectGroupInfo(group)
+
+                                                    messageRouterHelper.startIndifiService()
+                                                    messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+
                                                 } else {
+                                                    messageRouterHelper.startIndifiService()
+                                                    messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+
+                                                    val androidId = Settings.Secure.getString(
+                                                        contentResolver,
+                                                        Settings.Secure.ANDROID_ID
+                                                    )
+
                                                     // Save own info as GM
-                                                    lifecycleScope.launch {
+                                                    lifecycleScope.launch { // this code block will not run without lifecycleScope
                                                         val myDeviceName =
                                                             Build.MODEL // your device name
                                                         val myDeviceIP =
                                                             getLocalIpAddress() // a helper you should already have
+
                                                         deviceViewModel.ownDeviceInfo.collect { existing ->
-                                                            if (existing == null ||
-                                                                existing.name != myDeviceName ||
-                                                                existing.ip != myDeviceIP ||
-                                                                existing.isGroupOwner
-                                                            ) {
+                                                            if (existing == null || existing.name != myDeviceName || existing.androidId != androidId || existing.isGroupOwner) {
                                                                 val gmInfo = OwnDeviceInfo(
                                                                     name = myDeviceName,
                                                                     ip = myDeviceIP,
+                                                                    androidId = androidId,
                                                                     isGroupOwner = false // GM flag
                                                                 )
                                                                 deviceViewModel.insertOwnDevice(
@@ -434,37 +549,51 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                         }
                                                     }
 
-
                                                     val goIP = info.groupOwnerAddress.hostAddress
-                                                    Log.d(TAG, "I am Group Member. GO IP: $goIP")
+                                                    Log.d(
+                                                        TAG,
+                                                        "I am Group Member. GO IP: $goIP"
+                                                    )
 
                                                     if (goIP != null) {
+
+//                                                        start working from here, try to combine base64key with the deviceInfo table
+//                                                        so that it become easy to save and retrive the ip and its key.
+
+                                                        val base64Key =
+                                                            KeyStoreManager.getOwnPublicKeyBase64()
+
+                                                        // 2. Send KEY_EXCHANGE to GO
+                                                        val keyExchangeJson =
+                                                            JSONObject().apply {
+                                                                put(
+                                                                    "type",
+                                                                    "KEY_EXCHANGE"
+                                                                )
+                                                                put(
+                                                                    "publicKey",
+                                                                    base64Key
+                                                                )
+                                                            }
+
+                                                        val helloJson = buildWfdHelloMessage(
+                                                            androidId = androidId,
+                                                            name = Build.MODEL,
+                                                            wfdIp = getLocalIpAddress(),
+                                                            ownPublicKeyBase64 = base64Key
+                                                        )
                                                         Handler().postDelayed(
                                                             {
-                                                                MessageRouterHelper.messageRouterService?.sendMessageToServer(
+                                                                MessageRouterHelper.indifiService?.sendMessageToServerAsWfd(
                                                                     hostAddress = goIP,
-                                                                    message = buildHelloMessage(
-                                                                        Build.MODEL,
-                                                                        getLocalIpAddress()
-                                                                    )
+                                                                    message = helloJson
                                                                 )
 
-
-                                                                // 2. Send KEY_EXCHANGE to GO
-                                                                val keyExchangeJson =
-                                                                    JSONObject().apply {
-                                                                        put("type", "KEY_EXCHANGE")
-                                                                        put(
-                                                                            "publicKey",
-                                                                            KeyStoreManager.getOwnPublicKeyBase64()
-                                                                        )
-                                                                    }
-                                                                MessageRouterHelper.messageRouterService?.sendMessageToServer(
+                                                                MessageRouterHelper.indifiService?.sendMessageToServerAsWfd(
                                                                     hostAddress = goIP,
                                                                     message = keyExchangeJson.toString()
                                                                 )
-                                                            },
-                                                            5000
+                                                            }, 5000
                                                         ) // at least 7 seconds required to connect to server
                                                     }
                                                 }
@@ -487,24 +616,32 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
 
                                                             if (isGOViaWFD) {
                                                                 collectGroupInfo(group)
+
+                                                                messageRouterHelper.startIndifiService()
+                                                                messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+
                                                             } else {
+
+                                                                messageRouterHelper.startIndifiService()
+                                                                messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+
+                                                                val androidId =
+                                                                    Settings.Secure.ANDROID_ID
+
                                                                 // Save own info as GM
-                                                                lifecycleScope.launch {
+                                                                lifecycleScope.launch {// this code block will not run without lifecycleScope
                                                                     val myDeviceName =
                                                                         Build.MODEL // your device name
                                                                     val myDeviceIP =
                                                                         getLocalIpAddress() // a helper you should already have
 
                                                                     deviceViewModel.ownDeviceInfo.collect { existing ->
-                                                                        if (existing == null ||
-                                                                            existing.name != myDeviceName ||
-                                                                            existing.ip != myDeviceIP ||
-                                                                            existing.isGroupOwner
-                                                                        ) {
+                                                                        if (existing == null || existing.name != myDeviceName || existing.androidId != androidId || existing.isGroupOwner) {
                                                                             val gmInfo =
                                                                                 OwnDeviceInfo(
                                                                                     name = myDeviceName,
                                                                                     ip = myDeviceIP,
+                                                                                    androidId = androidId,
                                                                                     isGroupOwner = false // GM flag
                                                                                 )
                                                                             deviceViewModel.insertOwnDevice(
@@ -530,38 +667,40 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                                     "I am Group Member. GO IP: $goIP"
                                                                 )
                                                                 if (goIP != null) {
+                                                                    val base64Key =
+                                                                        KeyStoreManager.getOwnPublicKeyBase64()
+
+                                                                    val keyExchangeJson =
+                                                                        JSONObject().apply {
+                                                                            put(
+                                                                                "type",
+                                                                                "KEY_EXCHANGE"
+                                                                            )
+                                                                            put(
+                                                                                "publicKey",
+                                                                                base64Key
+                                                                            )
+                                                                        }
 
                                                                     val helloJson =
-                                                                        buildHelloMessage(
+                                                                        buildWfdHelloMessage(
+                                                                            androidId = androidId,
                                                                             name = Build.MODEL, // or any custom GM name
-                                                                            ip = getLocalIpAddress() // a helper that returns IP of this GM
+                                                                            wfdIp = getLocalIpAddress(),
+                                                                            ownPublicKeyBase64 = base64Key // a helper that returns IP of this GM
                                                                         )
                                                                     Handler().postDelayed(
                                                                         {
-                                                                            MessageRouterHelper.messageRouterService?.sendMessageToServer(
+                                                                            MessageRouterHelper.indifiService?.sendMessageToServerAsWfd(
                                                                                 hostAddress = goIP,
                                                                                 message = helloJson
                                                                             )
 
-                                                                            // 2. Send KEY_EXCHANGE to GO
-                                                                            val keyExchangeJson =
-                                                                                JSONObject().apply {
-                                                                                    put(
-                                                                                        "type",
-                                                                                        "KEY_EXCHANGE"
-                                                                                    )
-                                                                                    put(
-                                                                                        "publicKey",
-                                                                                        KeyStoreManager.getOwnPublicKeyBase64()
-                                                                                    )
-                                                                                }
-
-                                                                            MessageRouterHelper.messageRouterService?.sendMessageToServer(
+                                                                            MessageRouterHelper.indifiService?.sendMessageToServerAsWfd(
                                                                                 hostAddress = goIP,
                                                                                 message = keyExchangeJson.toString()
                                                                             )
-                                                                        },
-                                                                        5000
+                                                                        }, 5000
                                                                     ) // at least 7 seconds required to connect to server
 
                                                                 }
@@ -580,9 +719,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         } else {
                             Log.d(TAG, "P2P connection dropped")
                             Toast.makeText(
-                                this@WifiDirectScreen1Activity,
-                                "Disconnected",
-                                Toast.LENGTH_SHORT
+                                this@WifiDirectScreen1Activity, "Disconnected", Toast.LENGTH_SHORT
                             ).show()
                         }
                     }
@@ -605,68 +742,56 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         return "0.0.0.0"
     }
 
-    fun buildHelloMessage(name: String, ip: String): String {
-        val json = JSONObject()
-        json.put("type", "HELLO")
-        json.put("name", name)
-        json.put("ip", ip)
-        json.put("isGroupOwner", false)
-        json.put("timestamp", System.currentTimeMillis())
-        return json.toString()
-    }
-
 
 //    private fun startSilentServer() {
-//        MessageRouterHelper.messageRouterService?.startPrefSyncServer(
+//        MessageRouterHelper.indifiService?.startPrefSyncServer(
 //            this@WifiDirectScreen1Activity,
 //            currentP2pInfo!!
 //        )
 //    }
 
     private fun startServer() {
-        MessageRouterHelper.messageRouterService?.startChatServer(
-            onMessageReceived = {
-            }
-        )
+        MessageRouterHelper.indifiService?.startChatServer(onMessageReceived = {})
     }
 
     private fun collectGroupInfo(group: WifiP2pGroup) {
-        val owner = group.owner
-        val goName = group.networkName.substringAfterLast("-") //DIRECT-xT-Infinix SMART 6
-        val goMac = owner.deviceAddress
-        val goIP = currentP2pInfo!!.groupOwnerAddress.hostAddress
-        val timestamp = System.currentTimeMillis()
+        deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
+            val goName = group.networkName.substringAfterLast("-") //DIRECT-xT-Infinix SMART 6
+            val goIP = currentP2pInfo!!.groupOwnerAddress.hostAddress
+            val macAddress = group.owner.deviceAddress
+            val timestamp = System.currentTimeMillis()
+            val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val base64Key = KeyStoreManager.getOwnPublicKeyBase64()
+            val groupId = UUID.randomUUID().toString()
+            val sharedPreferences = getSharedPreferences("group_prefs", Context.MODE_PRIVATE)
+            sharedPreferences.edit().putString("groupId", groupId).apply()
 
-        val isThisDeviceGO = currentP2pInfo?.isGroupOwner == true
+            if (goIP != null) {
+                val duplicate = deviceViewModel.isDuplicateDevice(
+                    name = goName, androidId = androidId
+                )
 
-        if (goIP != null) {
-            deviceViewModel.findRecentDevice(goName, goIP, timestamp)
-                .observe(this) { existingDevice ->
-                    if (existingDevice == null) {
-                        val device = DeviceInfo(
-                            name = goName,
-                            ip = goIP,
-                            isGroupOwner = true,
-                            timestamp = timestamp
-                        )
-                        deviceViewModel.insert(device)
-                    } else {
-                        Log.d("DB", "Device with name $goName and IP $goIP already added recently.")
-                    }
-                }
-        }
-
-        lifecycleScope.launch {
-            deviceViewModel.ownDeviceInfo.collect { existing ->
-                if (existing == null ||
-                    existing.name != goName ||
-                    existing.ip != goIP ||
-                    !existing.isGroupOwner
-                ) {
-                    val goInfo = OwnDeviceInfo(
+                if (!duplicate) {
+                    val newDevice = DeviceInfo(
                         name = goName,
-                        ip = goIP!!,
-                        isGroupOwner = true
+                        wfdIp = goIP,
+                        lcIp = "",
+                        androidId = androidId,
+                        isGroupOwner = true,
+                        timestamp = timestamp,
+                        base64Key = base64Key,
+                        groupId = groupId,
+                        isRelayDevice = false
+                    )
+                    deviceViewModel.insert(newDevice)
+                    Log.d("GO_RECEIVER", "Inserted device: $newDevice")
+                }
+            }
+
+            deviceViewModel.ownDeviceInfo.collect { existing ->
+                if (existing == null || existing.name != goName || existing.androidId != androidId) {
+                    val goInfo = OwnDeviceInfo(
+                        name = goName, ip = goIP!!, androidId = androidId, isGroupOwner = true
                     )
                     deviceViewModel.insertOwnDevice(goInfo)
                 } else {
@@ -706,9 +831,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     Toast.makeText(
-                        this@WifiDirectScreen1Activity,
-                        "Peer discovery started",
-                        Toast.LENGTH_SHORT
+                        this@WifiDirectScreen1Activity, "Peer discovery started", Toast.LENGTH_SHORT
                     ).show()
                     Log.d(TAG, "Peer discovery started successfully")
                 }
@@ -733,9 +856,27 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         }
     }
 
+    fun getWlan0Ip(): String? {
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            for (iface in interfaces) {
+                if (iface.name.equals("wlan0", ignoreCase = true)) {
+                    val addresses = iface.inetAddresses
+                    for (address in addresses) {
+                        if (!address.isLoopbackAddress && address is Inet4Address) {
+                            return address.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
+    }
+
     private fun isWifiEnabled(context: Context): Boolean {
-        val wifiManager =
-            context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+        val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         return wifiManager.isWifiEnabled
     }
 }

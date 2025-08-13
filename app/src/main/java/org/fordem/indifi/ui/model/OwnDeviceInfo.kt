@@ -8,6 +8,7 @@ data class OwnDeviceInfo(
     @PrimaryKey val id: Int = 1, // Always only one row
     val name: String,
     val ip: String,
+    val androidId: String,
     val isGroupOwner: Boolean,
     val timestamp: Long = System.currentTimeMillis()
 )
