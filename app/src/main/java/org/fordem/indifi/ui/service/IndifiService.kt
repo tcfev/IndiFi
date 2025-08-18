@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.net.wifi.WpsInfo
 import android.net.wifi.p2p.WifiP2pConfig
@@ -61,7 +62,6 @@ import java.net.MulticastSocket
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketTimeoutException
 import javax.crypto.SecretKey
 import javax.inject.Inject
 
@@ -94,10 +94,10 @@ class IndifiService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-//        multicastSocket?.leaveGroup(InetSocketAddress(InetAddress.getByName(multicastGroup), MULTICAST_PORT), getCorrectNetworkInterface())
-//        multicastLock?.release()
-//        multicastLock = null
-//        multicastSocket?.close()
+        multicastSocket?.leaveGroup(InetSocketAddress(InetAddress.getByName(multicastGroup), MULTICAST_PORT), getCorrectNetworkInterface())
+        multicastLock?.release()
+        multicastLock = null
+        multicastSocket?.close()
 
     }
 
@@ -139,8 +139,7 @@ class IndifiService : Service() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // 🔒 Acquire multicast lock
-                val wifiManager =
-                    applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
                 multicastLock = wifiManager.createMulticastLock("myMulticastLock")
                 multicastLock?.setReferenceCounted(true)
                 multicastLock?.acquire()
@@ -153,9 +152,7 @@ class IndifiService : Service() {
 
 //                val localIp = getLocalIp()
 
-                multicastSocket!!.joinGroup(/*group*/InetSocketAddress(group, MULTICAST_PORT),
-                    iface
-                )
+                multicastSocket!!.joinGroup(/*group*/InetSocketAddress(group, MULTICAST_PORT), iface)
 
                 val buffer = ByteArray(4096)
 
@@ -197,10 +194,7 @@ class IndifiService : Service() {
                 if (addr is Inet4Address && !addr.isLoopbackAddress) {
                     // Filter for 192.168.*.* — common for hotspot and LAN IPs
                     if (addr.hostAddress.startsWith("192.168.")) {
-                        Log.d(
-                            "MULTICAST",
-                            "Using local IP: ${addr.hostAddress} from interface: ${iface.name}"
-                        )
+                        Log.d("MULTICAST", "Using local IP: ${addr.hostAddress} from interface: ${iface.name}")
                         return addr
                     }
                 }
@@ -241,6 +235,7 @@ class IndifiService : Service() {
         }
         throw IllegalStateException("No IP on wlan0 — are you a GO?")
     }
+
 
 
     private suspend fun handleMulticastMessage(message: String, senderIp: InetAddress) {
@@ -407,6 +402,8 @@ class IndifiService : Service() {
                 Log.e("TCP", "Server error: ${e.message}")
             }
         }
+
+
 
 
 //        CoroutineScope(Dispatchers.IO).launch {
@@ -1020,8 +1017,7 @@ class IndifiService : Service() {
     }
 
     fun isCurrentlyConnectedToHotspot(): Boolean {
-        val connectivityManager =
-            getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network)
         return capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
@@ -1405,242 +1401,53 @@ class IndifiService : Service() {
         }
     }
 
-//    fun connectToPeerAndSendMessage(iPToSend: String, message: String) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            try {
-//                val socket = Socket()
-//
-//                // Step 1: Bind socket to proper local IP based on target IP
-//                val targetIP = when {
-////                    iPToSend.startsWith("192.168.") -> getWlan0Ip() // Legacy/Hotspot (LC)
-//                    iPToSend.startsWith("192.168.49") -> getP2p0Ip()             // WFD P2P
-//                    else -> throw IllegalStateException("Unknown target IP type: $iPToSend")
-//                }
-////                val network = getNetworkForInterface("p2p0")
-////                network?.bindSocket(socket)
-//
-//                socket.bind(InetSocketAddress(targetIP, 0)) // Bind to correct interface/IP
-//                socket.connect(InetSocketAddress(iPToSend, UNICAST_PORT), 3000)
-//
-//                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-//
-//                // If not a keep-alive ping, send actual message
-//                if (message != "ping") {
-//                    writer.write(message + "\n")
-//                    writer.flush()
-//                    Log.d("E2EE", "Message sent to $iPToSend")
-//                }
-//
-//                Log.d("E2EE", "Encrypted message sent to $iPToSend")
-//                // Start keep-alive (pinging every 30s) after initial successful message
-//                if (message != "ping") {
-//                    startKeepAlive(iPToSend)
-//                }
-//
-//
-////                val group = InetAddress.getByName(multicastGroup)
-////                val iface = getCorrectNetworkInterface()
-////                multicastSocket!!.joinGroup(InetSocketAddress(group, MULTICAST_PORT), iface)
-//
-//
-//                socket.close()
-//            } catch (e: Exception) {
-//                Log.e("E2EE", "Failed to connect/send to $iPToSend: ${e.message}")
-//            }
-//        }
-//    }
-
-    //    fun connectToPeerAndSendMessage(iPToSend: String, message: String) {
-//        CoroutineScope(Dispatchers.IO).launch {
-//            try {
-//                // Pick correct local interface IP
-//                val targetIP = when {
-//                    iPToSend.startsWith("192.168.49") -> getP2p0Ip() // WFD P2P
-//                    else -> throw IllegalStateException("Unknown target IP type: $iPToSend")
-//                }
-//
-//                val cm =
-//                    applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-//                val networks = cm.allNetworks
-//
-//
-//                Socket().use { socket ->
-//                    networks.firstOrNull { net ->
-//                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-//                            val caps = cm.getNetworkCapabilities(net)
-//                            val linkProps = cm.getLinkProperties(net)
-//
-//                            caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
-//                                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) &&
-//                                    linkProps?.interfaceName == "p2p0"
-//                        } else {
-//                            TODO("VERSION.SDK_INT < O_MR1")
-//                        }
-//                    }?.bindSocket(socket)
-//
-//                    // Bind to correct interface/IP
-//                    socket.bind(InetSocketAddress(targetIP, 0))
-//
-//                    // Increase connect timeout for Wi-Fi Direct
-//                    socket.connect(InetSocketAddress(iPToSend, UNICAST_PORT), 8000)
-//
-//                    socket.getOutputStream().bufferedWriter().use { writer ->
-//                        if (message != "ping") {
-//                            writer.write(message)
-//                            writer.newLine()
-//                            writer.flush()
-//                            Log.d("E2EE", "Message sent to $iPToSend: $message")
-//                        }
-//                    }
-//
-//                    // Optionally wait for ACK (prevents race conditions)
-//                    socket.getInputStream().bufferedReader().use { reader ->
-//                        try {
-//                            socket.soTimeout = 2000 // 2s to wait for ack
-//                            val ack = reader.readLine()
-//                            if (!ack.isNullOrBlank()) {
-//                                Log.d("E2EE", "Got ACK from $iPToSend: $ack")
-//                            } else {
-//                                Log.d("E2EE", "Got Nothing")
-//                            }
-//                        } catch (e: SocketTimeoutException) {
-//                            Log.w("E2EE", "No ACK received from $iPToSend (timeout)")
-//                        }
-//                    }
-//
-//                    // Gracefully close output before full close
-//                    socket.shutdownOutput()
-//
-//                    // Small delay so OS can flush final packets
-//                    delay(100)
-//                }
-//
-//                // Start keep-alive only for real messages
-//                if (message != "ping") {
-//                    startKeepAlive(iPToSend)
-//                }
-//
-//            } catch (e: Exception) {
-//                Log.e("E2EE", "Failed to connect/send to $iPToSend: ${e.message}", e)
-//            }
-//        }
-//    }
     fun connectToPeerAndSendMessage(iPToSend: String, message: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Check if network is available before attempting to send
-                if (!isNetworkAvailable()) {
-                    Log.e("E2EE", "No active network available, aborting send to $iPToSend")
-                    return@launch
-                }
+                val socket = Socket()
 
+                // Step 1: Bind socket to proper local IP based on target IP
                 val targetIP = when {
-                    iPToSend.startsWith("192.168.49") -> getP2p0Ip()
+//                    iPToSend.startsWith("192.168.") -> getWlan0Ip() // Legacy/Hotspot (LC)
+                    iPToSend.startsWith("192.168.49") -> getP2p0Ip()             // WFD P2P
                     else -> throw IllegalStateException("Unknown target IP type: $iPToSend")
                 }
+//                val network = getNetworkForInterface("p2p0")
+//                network?.bindSocket(socket)
 
-                val cm =
-                    applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                val networks = cm.allNetworks
+                socket.bind(InetSocketAddress(targetIP, 0)) // Bind to correct interface/IP
+                socket.connect(InetSocketAddress(iPToSend, UNICAST_PORT), 3000)
 
-                val p2pNetwork = networks.firstOrNull { net ->
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        val caps = cm.getNetworkCapabilities(net)
-                        val linkProps = cm.getLinkProperties(net)
+                val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
 
-                        caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
-                                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) &&
-                                linkProps?.interfaceName == "p2p0"
-                    } else {
-                        false
-                    }
+                // If not a keep-alive ping, send actual message
+                if (message != "ping") {
+                    writer.write(message + "\n")
+                    writer.flush()
+                    Log.d("E2EE", "Message sent to $iPToSend")
                 }
 
-                if (p2pNetwork == null) {
-                    Log.e("E2EE", "No active Wi-Fi Direct (p2p0) network found")
-                    return@launch
-                }
+//                try testing again with battery optimization
 
-                Socket().use { socket ->
-                    p2pNetwork.bindSocket(socket)
-
-                    socket.bind(InetSocketAddress(targetIP, 0))
-                    socket.connect(InetSocketAddress(iPToSend, UNICAST_PORT), 8000)
-
-                    socket.getOutputStream().bufferedWriter().use { writer ->
-                        if (message != "ping") {
-                            writer.write(message)
-                            writer.newLine()
-                            writer.flush()
-                            Log.d("E2EE", "Message sent to $iPToSend: $message")
-                        }
-                    }
-
-                    socket.getInputStream().bufferedReader().use { reader ->
-                        try {
-                            socket.soTimeout = 2000
-                            val ack = reader.readLine()
-                            if (!ack.isNullOrBlank()) {
-                                Log.d("E2EE", "Got ACK from $iPToSend: $ack")
-                            } else {
-                                Log.d("E2EE", "Got Nothing")
-                            }
-                        } catch (e: SocketTimeoutException) {
-                            Log.w("E2EE", "No ACK received from $iPToSend (timeout)")
-                        }
-                    }
-
-                    socket.shutdownOutput()
-                    delay(100)
-                }
-
+                Log.d("E2EE", "Encrypted message sent to $iPToSend")
+                // Start keep-alive (pinging every 30s) after initial successful message
                 if (message != "ping") {
                     startKeepAlive(iPToSend)
                 }
 
+
+//                val group = InetAddress.getByName(multicastGroup)
+//                val iface = getCorrectNetworkInterface()
+//                multicastSocket!!.joinGroup(InetSocketAddress(group, MULTICAST_PORT), iface)
+
+
+                socket.close()
             } catch (e: Exception) {
-                Log.e("E2EE", "Failed to connect/send to $iPToSend: ${e.message}", e)
+                Log.e("E2EE", "Failed to connect/send to $iPToSend: ${e.message}")
             }
         }
     }
 
-    private fun isNetworkAvailable(): Boolean {
-        val connectivityManager =
-            getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            Log.d("Network", "active network $network")
-            network ?: return false
-            val actNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
-            when {
-                actNetwork.hasTransport(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) -> {
-                    Log.d("Network", "wifi connected")
-                    true
-                }
-
-                actNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
-                    Log.d("Network", "cellular network connected")
-                    true
-                }
-
-                else -> {
-                    Log.d("Network", "internet not connected")
-                    false
-                }
-            }
-        } else {
-            val activeNetwork = connectivityManager.activeNetworkInfo
-            if (activeNetwork != null) {
-                when (activeNetwork.type) {
-                    ConnectivityManager.TYPE_WIFI -> true
-                    ConnectivityManager.TYPE_MOBILE -> true
-                    else -> false
-                }
-            } else {
-                false
-            }
-        }
-    }
 //    // Store available networks for wlan0 and p2p0 globally
 //    private val availableNetworks = mutableMapOf<String, Network>()
 //
@@ -1698,8 +1505,7 @@ class IndifiService : Service() {
 //    }
 
     private fun getNetworkForInterface(ifaceName: String): Network? {
-        val connectivityManager =
-            applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val connectivityManager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val allNetworks = connectivityManager.allNetworks
 
         for (network in allNetworks) {

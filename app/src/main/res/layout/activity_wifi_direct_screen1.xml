@@ -6,6 +6,12 @@
     android:padding="24dp">
 
     <Button
+        android:id="@+id/btnCreateGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="CreateGroupAsGo" />
+
+    <Button
         android:id="@+id/btnDisconnect"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

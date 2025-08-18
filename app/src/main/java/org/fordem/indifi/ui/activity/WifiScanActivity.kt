@@ -241,7 +241,7 @@ class WifiScanActivity : AppCompatActivity() {
                             }
 
                             val localSocketAddress = InetSocketAddress(localIp, 0)
-                            DatagramSocket(localSocketAddress).use { socket ->
+                            DatagramSocket(/*localSocketAddress*/).use { socket ->
                                 val packet = DatagramPacket(buffer, buffer.size, group, MULTICAST_PORT)
                                 socket.send(packet)
                                 Log.d("APP_LAYER", "Sent: $message via $localIp")
@@ -945,15 +945,17 @@ class WifiScanActivity : AppCompatActivity() {
 
         } else {
             deviceViewModel.viewModelScope.launch {
+                androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+
                 val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
                 // Remove existing config if already present
                 wifiManager.configuredNetworks.find { it.SSID == "\"$ssid\"" }?.let {
                     wifiManager.removeNetwork(it.networkId)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         wifiManager.staConcurrencyForMultiInternetMode
-                    } else {
+                    } /*else {
                         TODO("VERSION.SDK_INT < TIRAMISU")
-                    }
+                    }*/
                 }
                 delay(3000)
 
@@ -992,10 +994,60 @@ class WifiScanActivity : AppCompatActivity() {
 //                    sendHelloPacketToGO()
 //                    MessageRouterHelper.sendHelloToGO(getHotspotGatewayIP()!!)
 
-//                    deviceViewModel.viewModelScope.launch {
-                    val deferredValue = async(Dispatchers.IO) { getOwnIp(this@WifiScanActivity) }
-                    val lcIpGM = deferredValue.await()
-                    delay(3000)
+////                    deviceViewModel.viewModelScope.launch {
+//                    val deferredValue = async(Dispatchers.IO) { getOwnIp(this@WifiScanActivity) }
+//                    val lcIpGM = deferredValue.await()
+//                    delay(3000)
+//
+//                    if (lcIpGM.isNullOrBlank() || lcIpGM == "0.0.0.0") {
+//                        Toast.makeText(
+//                            this@WifiScanActivity,
+//                            "Failed to get valid IP",
+//                            Toast.LENGTH_SHORT
+//                        ).show()
+//                        return@launch
+//                    }
+//
+//
+                    val ownName = /*Build.MODEL ?:*/ "LC_GM"
+                    val timestamp = System.currentTimeMillis()
+//
+////                    val helloJson = """
+////                        {
+////                            \"type\": \"HELLO\",
+////                            \"name\": \"$ownName\",
+////                            \"ip\": \"$lcIpGM\",
+////                            \"isGroupOwner\": false,
+////                            \"timestamp\": $timestamp
+////                        }
+////                    """.trimIndent()
+//
+//                    val lcIpGO = getHotspotGatewayIP(this@WifiScanActivity)
+                    val goName = "LC_GO" // Or fetch from SSID / any other logic
+                    val goTimestamp = timestamp - 1  // Just to keep some order
+//                    delay(3000)
+//
+//                    if (lcIpGO.isNullOrBlank()) {
+//                        Toast.makeText(
+//                            this@WifiScanActivity,
+//                            "Failed to get GO IP",
+//                            Toast.LENGTH_SHORT
+//                        ).show()
+//                        return@launch
+//                    }
+
+
+
+
+
+
+
+                    delay(3000) // Allow network stabilization
+
+                    val lcIpGM = withContext(Dispatchers.IO) {
+//                            reinstall and check if the IP is correct after having p2p connection
+                        getOwnIp(this@WifiScanActivity)
+                    }
 
                     if (lcIpGM.isNullOrBlank() || lcIpGM == "0.0.0.0") {
                         Toast.makeText(
@@ -1005,26 +1057,10 @@ class WifiScanActivity : AppCompatActivity() {
                         ).show()
                         return@launch
                     }
+//                        val gmBase64Key = KeyStoreManager.getOwnPublicKeyBase64()
 
-
-                    val ownName = /*Build.MODEL ?:*/ "LC_GM"
-                    val timestamp = System.currentTimeMillis()
-
-//                    val helloJson = """
-//                        {
-//                            \"type\": \"HELLO\",
-//                            \"name\": \"$ownName\",
-//                            \"ip\": \"$lcIpGM\",
-//                            \"isGroupOwner\": false,
-//                            \"timestamp\": $timestamp
-//                        }
-//                    """.trimIndent()
-
+//                        reinstall and check if the IP is correct after having p2p connection
                     val lcIpGO = getHotspotGatewayIP(this@WifiScanActivity)
-                    val goName = "LC_GO" // Or fetch from SSID / any other logic
-                    val goTimestamp = timestamp - 1  // Just to keep some order
-                    delay(3000)
-
                     if (lcIpGO.isNullOrBlank()) {
                         Toast.makeText(
                             this@WifiScanActivity,
@@ -1033,6 +1069,17 @@ class WifiScanActivity : AppCompatActivity() {
                         ).show()
                         return@launch
                     }
+
+
+
+
+                    deviceViewModel.updateLcIpAndRelayByAndroidId(
+                        androidId = androidId,
+                        newLcIp = lcIpGM,
+                        isRelayDevice = true
+                    )
+
+
 
 //                    androidId = Settings.Secure.ANDROID_ID
 

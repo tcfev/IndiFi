@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.MacAddress
 import android.net.NetworkInfo
 import android.net.wifi.WifiManager
 import android.net.wifi.WpsInfo
@@ -21,10 +22,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -136,6 +139,10 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         setupIntentFilter()
         setupReceiver()
 
+        binding.btnCreateGroup.setOnClickListener {
+            createP2pGroupGoMode()
+        }
+
         binding.btnDisconnect.setOnClickListener {
             wifiP2pManager.requestGroupInfo(channel) { group ->
                 if (group != null) {
@@ -226,39 +233,136 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             }
         }
 
+//        binding.lvPeers.setOnItemClickListener { _, _, position, _ ->
+//            val device = peers[position]
+////            val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+////                WifiP2pConfig.Builder()
+////                    .setDeviceAddress(MacAddress.fromString(device.deviceAddress))
+//////                    .setNetworkName("DIRECT-DUMMY")
+//////                    .setPassphrase("12345678")
+////                    .enablePersistentMode(false)
+////                    .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_2GHZ) // Force 2.4 GHz
+////                    .build().apply {
+////                        wps.setup = WpsInfo.PBC
+////                        groupOwnerIntent = 0 // Strongly prefer NOT to be GO — but this is the initiator
+////                    }
+////            } else {
+////                WifiP2pConfig().apply {
+////                    deviceAddress = device.deviceAddress
+////                    wps.setup = WpsInfo.PBC
+//////                groupOwnerIntent = 15 // 0–15 → 15 = strongly prefer to be GO
+////                    groupOwnerIntent = 0 // Strongly prefer NOT to be GO — but this is the initiator
+////                }
+////            }
+//
+//
+//            val config = WifiP2pConfig().apply {
+//                deviceAddress = device.deviceAddress
+//                wps.setup = WpsInfo.PBC
+////                groupOwnerIntent = 15 // 0–15 → 15 = strongly prefer to be GO
+//                groupOwnerIntent = 0 // Strongly prefer NOT to be GO — but this is the initiator
+//            }
+//
+//
+////            wlan0 Frequency: 2412MHz
+////            p2p0 Frequency: 5745 MHz
+////
+////
+////            try to set both wlan0 and p2p0 connections
+////                on the same frequency then try again
+//
+//
+////            // Reflection: preferred frequency or band
+////            try {
+////                val preferredFreqField =
+////                    WifiP2pConfig::class.java.getDeclaredField("preferredFrequency")
+////                preferredFreqField.isAccessible = true
+////                preferredFreqField.setInt(config, 2412) // 5 GHz channel 36
+////            } catch (e: Exception) {
+////                e.printStackTrace()
+////            }
+//
+//            try {
+//                wifiP2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
+//                    override fun onSuccess() {
+//                        val identifier = device.deviceName
+//                            ?: device.deviceAddress // Fallback to MAC if name is null
+//                        saveConnectedDeviceMac(
+//                            this@WifiDirectScreen1Activity,
+//                            identifier,
+//                            device.deviceAddress
+//                        )
+//
+//                        Toast.makeText(
+//                            this@WifiDirectScreen1Activity,
+//                            "Connecting to ${device.deviceName}",
+//                            Toast.LENGTH_SHORT
+//                        ).show()
+//
+//
+////                        messageRouterHelper.startIndifiService()
+////                        messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+////
+////                        messageRouterHelper.startMulticastService()
+////                        messageRouterHelper.bindMulticastService(this@WifiDirectScreen1Activity)
+//
+//                    }
+//
+//                    override fun onFailure(reason: Int) {
+//                        Toast.makeText(
+//                            this@WifiDirectScreen1Activity,
+//                            "Connection failed: $reason",
+//                            Toast.LENGTH_SHORT
+//                        ).show()
+//                        Log.e(TAG, "Connection failed: $reason")
+//                    }
+//                })
+//            } catch (e: SecurityException) {
+//                Log.e(TAG, "Missing required permission for peer discovery", e)
+//            }
+//        }
+
+
         binding.lvPeers.setOnItemClickListener { _, _, position, _ ->
             val device = peers[position]
-            val config = WifiP2pConfig().apply {
-                deviceAddress = device.deviceAddress
-                wps.setup = WpsInfo.PBC
-//                groupOwnerIntent = 15 // 0–15 → 15 = strongly prefer to be GO
-                groupOwnerIntent = 0 // Strongly prefer NOT to be GO — but this is the initiator
-            }
 
+            // Replace these with the GO's actual group name and passphrase
+//            val goNetworkNae = "DIRECT-GO-MyNet"
+//            val goPassphrase = "mypassword"
+
+            val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android 10+ : we can directly join the known GO group
+                WifiP2pConfig.Builder()
+                    .setDeviceAddress(MacAddress.fromString(device.deviceAddress))
+//                    .setNetworkName("DIRECT-xy-" + device.deviceName)
+//                    .setPassphrase(groupPass)
+//                    .enablePersistentMode(false)
+                    .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_2GHZ) // force 2.4 GHz
+                    .build().apply {
+                        wps.setup = WpsInfo.PBC
+                        groupOwnerIntent = 0 // strongly prefer to be GM
+                    }
+            } else {
+                // Pre-Android 10: must rely on normal GO invitation process
+                WifiP2pConfig().apply {
+                    deviceAddress = device.deviceAddress
+                    wps.setup = WpsInfo.PBC
+                    groupOwnerIntent = 0
+                }
+            }
             try {
                 wifiP2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
-                        val identifier = device.deviceName
-                            ?: device.deviceAddress // Fallback to MAC if name is null
-                        saveConnectedDeviceMac(
-                            this@WifiDirectScreen1Activity,
-                            identifier,
-                            device.deviceAddress
-                        )
-
                         Toast.makeText(
                             this@WifiDirectScreen1Activity,
                             "Connecting to ${device.deviceName}",
                             Toast.LENGTH_SHORT
                         ).show()
 
-
-//                        messageRouterHelper.startIndifiService()
-//                        messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
-//
-//                        messageRouterHelper.startMulticastService()
-//                        messageRouterHelper.bindMulticastService(this@WifiDirectScreen1Activity)
-
+                        Log.d(
+                            TAG,
+                            "Connection initiated to ${device.deviceName} (${device.deviceName})"
+                        )
                     }
 
                     override fun onFailure(reason: Int) {
@@ -271,7 +375,7 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                     }
                 })
             } catch (e: SecurityException) {
-                Log.e(TAG, "Missing required permission for peer discovery", e)
+                Log.e(TAG, "Missing required permission for Wi-Fi Direct connection", e)
             }
         }
 
@@ -360,6 +464,78 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         }
     }
 
+    private val groupPass = "meshconnect" // fixed for all groups
+
+    private fun createP2pGroupGoMode() {
+        val deviceName = Settings.Global.getString(contentResolver, "device_name") ?: Build.MODEL // fallback if device_name not found
+        val uniqueSuffix = Integer.toHexString((Math.random() * 0xFFFF).toInt()).uppercase()
+//        val groupName = "DIRECT-${deviceName}-$uniqueSuffix"
+        val groupName = "DIRECT-${deviceName}"
+
+
+        // Android 13+ supports WifiP2pConfig.Builder for GO creation
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val config = WifiP2pConfig.Builder()
+                .setNetworkName(groupName) // SSID
+                .setPassphrase(groupPass) // WPA2 pass
+//                .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_2GHZ) // Force 2.4 GHz
+                .setGroupOperatingFrequency(2412)
+                .build().apply {
+                    wps.setup = WpsInfo.PBC
+                    groupOwnerIntent = 15 // Force GO
+                }
+
+            wifiP2pManager.createGroup(channel, config, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Toast.makeText(
+                        this@WifiDirectScreen1Activity,
+                        "Group created (2.4 GHz)",
+                        Toast.LENGTH_SHORT
+                    )
+                        .show()
+                }
+
+                override fun onFailure(reason: Int) {
+                    Toast.makeText(
+                        this@WifiDirectScreen1Activity,
+                        "Failed: $reason",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            })
+        } else {
+            // Older Android — no public band API, try reflection fallback
+            try {
+                val config = WifiP2pConfig()
+                config.groupOwnerIntent = 15 // Force GO
+                val preferredFreqField = WifiP2pConfig::class.java.getDeclaredField("preferredFrequency")
+                preferredFreqField.isAccessible = true
+                preferredFreqField.setInt(config, 2412) // 2.4 GHz channel 1
+
+                wifiP2pManager.createGroup(channel, object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        Toast.makeText(
+                            this@WifiDirectScreen1Activity,
+                            "Group created (legacy)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    override fun onFailure(reason: Int) {
+                        Toast.makeText(
+                            this@WifiDirectScreen1Activity,
+                            "Failed legacy: $reason",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                })
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this, "Reflection failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun saveConnectedDeviceMac(context: Context, identifier: String, macAddress: String) {
         val prefs = context.getSharedPreferences("connected_devices", Context.MODE_PRIVATE)
         val jsonString = prefs.getString("device_mac_map", "{}")
@@ -410,7 +586,11 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == permissionRequestCode) {
             if (hasAllPermissions()) {
-                Toast.makeText(this, "Permissions granted. Ready to proceed.", Toast.LENGTH_SHORT)
+                Toast.makeText(
+                    this,
+                    "Permissions granted. Ready to proceed.",
+                    Toast.LENGTH_SHORT
+                )
                     .show()
             } else {
                 Toast.makeText(
@@ -428,6 +608,45 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
+    }
+
+    private val batteryOptimizationLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            checkBatteryOptimization()
+        }
+
+    private fun checkBatteryOptimization() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !pm.isIgnoringBatteryOptimizations(
+                packageName
+            )
+        ) {
+            AlertDialog.Builder(this)
+                .setTitle("Disable Battery Optimization")
+                .setMessage("Wi-Fi Direct requires battery optimization to be disabled for reliable communication, including 2.4 GHz band support. Please disable it now.")
+                .setPositiveButton("Open Settings") { _, _ ->
+                    val intent =
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = android.net.Uri.parse("package:$packageName")
+                        }
+                    batteryOptimizationLauncher.launch(intent)
+                }
+                .setNegativeButton("Cancel") { _, _ ->
+                    Toast.makeText(
+                        this,
+                        "Battery optimization must be disabled for Wi-Fi Direct to work reliably.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    Handler(Looper.getMainLooper()).postDelayed(
+                        { checkBatteryOptimization() },
+                        10000
+                    )
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            Log.d(TAG, "Battery optimization is disabled for $packageName")
         }
     }
 
@@ -499,6 +718,8 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                     "Group Formed, ssid: $ssid, pass: $password"
                                                 )
 
+//                                                dumpWifiBandInfo() // Log band info after group formation
+
                                                 if (isGOViaWFD) {
 
                                                     myMembersList =
@@ -549,7 +770,8 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                         }
                                                     }
 
-                                                    val goIP = info.groupOwnerAddress.hostAddress
+                                                    val goIP =
+                                                        info.groupOwnerAddress.hostAddress
                                                     Log.d(
                                                         TAG,
                                                         "I am Group Member. GO IP: $goIP"
@@ -614,16 +836,22 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                                                             myMembersList =
                                                                 group.clientList // The list of devices attached to the group
 
+//                                                            dumpWifiBandInfo() // Log band info after group formation
+
                                                             if (isGOViaWFD) {
                                                                 collectGroupInfo(group)
 
                                                                 messageRouterHelper.startIndifiService()
-                                                                messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+                                                                messageRouterHelper.bindService(
+                                                                    this@WifiDirectScreen1Activity
+                                                                )
 
                                                             } else {
 
                                                                 messageRouterHelper.startIndifiService()
-                                                                messageRouterHelper.bindService(this@WifiDirectScreen1Activity)
+                                                                messageRouterHelper.bindService(
+                                                                    this@WifiDirectScreen1Activity
+                                                                )
 
                                                                 val androidId =
                                                                     Settings.Secure.ANDROID_ID
@@ -719,13 +947,17 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                         } else {
                             Log.d(TAG, "P2P connection dropped")
                             Toast.makeText(
-                                this@WifiDirectScreen1Activity, "Disconnected", Toast.LENGTH_SHORT
+                                this@WifiDirectScreen1Activity,
+                                "Disconnected",
+                                Toast.LENGTH_SHORT
                             ).show()
                         }
                     }
 
                 }
             }
+
+//            try invitatio check on GO device and create group with 2.4 Ghz
         }
     }
 
@@ -754,13 +986,38 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         MessageRouterHelper.indifiService?.startChatServer(onMessageReceived = {})
     }
 
+//    private fun dumpWifiBandInfo() {
+//        try {
+//            val wifiManager = getSystemService(Context.WIFI_SERVICE) as WifiManager
+//            val wifiInfo = wifiManager.connectionInfo
+//            val frequency = wifiInfo.frequency
+//            val band = when (frequency) {
+//                in 2400..2500 -> "2.4 GHz"
+//                in 4900..5900 -> "5 GHz"
+//                else -> "Unknown ($frequency MHz)"
+//            }
+//            Log.d(TAG, "Wi-Fi band: $band, Frequency: $frequency MHz")
+//            try {
+//                val process = Runtime.getRuntime().exec("ip link show p2p0")
+//                val reader = process.inputStream.bufferedReader()
+//                val output = reader.readText()
+//                Log.d(TAG, "p2p0 interface state:\n$output")
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Failed to dump p2p0 interface: ${e.message}")
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "Failed to dump Wi-Fi band info: ${e.message}")
+//        }
+//    }
+
     private fun collectGroupInfo(group: WifiP2pGroup) {
         deviceViewModel.viewModelScope.launch(Dispatchers.IO) {
             val goName = group.networkName.substringAfterLast("-") //DIRECT-xT-Infinix SMART 6
             val goIP = currentP2pInfo!!.groupOwnerAddress.hostAddress
             val macAddress = group.owner.deviceAddress
             val timestamp = System.currentTimeMillis()
-            val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val androidId =
+                Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             val base64Key = KeyStoreManager.getOwnPublicKeyBase64()
             val groupId = UUID.randomUUID().toString()
             val sharedPreferences = getSharedPreferences("group_prefs", Context.MODE_PRIVATE)
@@ -807,6 +1064,9 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
             isReceiverRegistered = true
         }
+
+        checkBatteryOptimization()
+//        dumpWifiBandInfo() // Log band info on resume
     }
 
     override fun onPause() {
@@ -826,12 +1086,47 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
         }
     }
 
+//    private fun discoverPeers() {
+//        try {
+//            wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+//                override fun onSuccess() {
+//                    Toast.makeText(
+//                        this@WifiDirectScreen1Activity,
+//                        "Peer discovery started",
+//                        Toast.LENGTH_SHORT
+//                    ).show()
+//                    Log.d(TAG, "Peer discovery started successfully")
+//                }
+//
+//                override fun onFailure(reason: Int) {
+//                    val message = when (reason) {
+//                        WifiP2pManager.P2P_UNSUPPORTED -> "Wi-Fi Direct not supported"
+//                        WifiP2pManager.BUSY -> "System busy, try again"
+//                        WifiP2pManager.ERROR -> "Internal error"
+//                        else -> "Unknown error"
+//                    }
+//                    Toast.makeText(
+//                        this@WifiDirectScreen1Activity,
+//                        "Discovery failed: $message",
+//                        Toast.LENGTH_SHORT
+//                    ).show()
+//                    Log.e(TAG, "Discovery failed: $message")
+//                }
+//            })
+//        } catch (e: SecurityException) {
+//            Log.e(TAG, "Missing required permission for peer discovery", e)
+//        }
+//    }
+
     private fun discoverPeers() {
         try {
+            // Start peer discovery
             wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     Toast.makeText(
-                        this@WifiDirectScreen1Activity, "Peer discovery started", Toast.LENGTH_SHORT
+                        this@WifiDirectScreen1Activity,
+                        "Peer discovery started (2.4 GHz filter)",
+                        Toast.LENGTH_SHORT
                     ).show()
                     Log.d(TAG, "Peer discovery started successfully")
                 }
@@ -851,10 +1146,39 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
                     Log.e(TAG, "Discovery failed: $message")
                 }
             })
+
+//            // After discovery, request the peer list and filter it
+//            wifiP2pManager.requestPeers(channel) { peerList ->
+//                val wifiManager = getSystemService(Context.WIFI_SERVICE) as WifiManager
+//                val scanResults = wifiManager.scanResults
+//
+//                // Filter for peers whose SSIDs appear in 2.4 GHz scan results
+//                val filteredPeers = peerList.deviceList.filter { device ->
+//                    scanResults.any { scan ->
+//                        scan.SSID == device.deviceName &&
+//                                scan.frequency in 2400..2500
+//                    }
+//                }
+//
+//                Log.d(TAG, "Filtered peers (2.4 GHz): ${filteredPeers.map { it.deviceName }}")
+//
+//                // Update your adapter with these filtered peers
+//                peerAdapter.clear()
+//                filteredPeers.forEach { peer ->
+//                    peerAdapter.add("${peer.deviceName} (${peer.deviceAddress})")
+//                }
+//                peerAdapter.notifyDataSetChanged()
+//
+//                // Also update the internal `peers` list so your onItemClick works
+//                peers.clear()
+//                peers.addAll(filteredPeers)
+//            }
+
         } catch (e: SecurityException) {
             Log.e(TAG, "Missing required permission for peer discovery", e)
         }
     }
+
 
     fun getWlan0Ip(): String? {
         try {
@@ -876,7 +1200,8 @@ class WifiDirectScreen1Activity : AppCompatActivity() {
     }
 
     private fun isWifiEnabled(context: Context): Boolean {
-        val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+        val wifiManager =
+            context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         return wifiManager.isWifiEnabled
     }
 }

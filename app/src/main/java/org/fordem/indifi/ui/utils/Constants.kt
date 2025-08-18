@@ -16,6 +16,7 @@ object Constants {
     lateinit var lastDeviceInfo: String
     lateinit var gm_ip: String
     var currentBoundInterface: String? = null
+    var goMacAddress: String? = null
 
     val connectedGMIPs = mutableSetOf<String>()
     val displayedPeersList = mutableListOf<PeerDevice>()

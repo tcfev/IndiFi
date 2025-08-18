@@ -384,8 +384,7 @@ class MulticastService : Service() {
         val devicesArray = obj.getJSONArray("devices")
         for (i in 0 until devicesArray.length()) {
             val device = devicesArray.getJSONObject(i)
-            val name =
-                device.getString("name")        // name tag is not matching to the hello message received
+            val name = device.getString("name")        // name tag is not matching to the hello message received
             val wfdIp = device.getString("wfdIp")
             val lcIp = device.getString("lcIp")
             val androidId = device.getString("androidId")
